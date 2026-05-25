@@ -24,7 +24,6 @@ if "nombre_admin" not in st.session_state:
 def conectar_google_sheets():
     try:
         secrets_gcp = st.secrets["gcp_service_account"]
-        # Validamos si la estructura viene como texto plano o como diccionario directo
         if isinstance(secrets_gcp, str):
             creds_dict = json.loads(secrets_gcp)
         else:
@@ -64,64 +63,71 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["👪 Ingreso Padres / Clientes", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ EN VIVO PARA LOS PADRES DE FAMILIA
+# SECCIÓN 1: NUEVA INTERFAZ DESPLEGABLE POR EQUIPO PARA LOS PADRES
 # =====================================================================
 with tab_padres:
     st.write("### 🔍 Consulta tus partidos grabados")
-    st.write("Ingresa tu documento de identidad registrado para ver los videos de tu hijo y el estado de tu cuenta.")
+    st.write("Selecciona tu equipo y busca el nombre del jugador para acceder a la cartelera de videos.")
     
-    documento_input = st.text_input("Número de Documento del Padre:", key="doc_padre").strip()
-    
-    if st.button("Buscar mis Grabaciones", key="btn_buscar"):
-        if not documento_input:
-            st.warning("⚠️ Por favor, escribe un número de documento válido antes de buscar.")
-        else:
-            with st.spinner("Buscando en la base de datos de Focus..."):
-                df_usuarios = obtener_datos_pestana("USUARIOS")
-                df_partidos = obtener_datos_pestana("PARTIDOS")
-                
-                if not df_usuarios.empty:
-                    # Estandarizamos el texto para evitar fallos por espacios o ceros iniciales
-                    df_usuarios["Documento"] = df_usuarios["Documento"].astype(str).str.strip()
-                    usuario_encontrado = df_usuarios[df_usuarios["Documento"] == documento_input]
+    # Descarga previa de datos para alimentar los selectores dinámicos
+    with st.spinner("Sincronizando cartelera deportiva..."):
+        df_usuarios = obtener_datos_pestana("USUARIOS")
+        df_partidos = obtener_datos_pestana("PARTIDOS")
+        
+    if not df_usuarios.empty:
+        # Limpieza de textos y eliminación de espacios fantasmas
+        df_usuarios["Equipo"] = df_usuarios["Equipo"].astype(str).str.strip()
+        df_usuarios["Hijo_Jugador"] = df_usuarios["Hijo_Jugador"].astype(str).str.strip()
+        
+        # 1. Filtro dinámico de Equipos (alfabético y sin duplicados)
+        lista_equipos = sorted([eq for eq in df_usuarios["Equipo"].unique() if eq])
+        equipo_seleccionado = st.selectbox("1. Selecciona el Equipo de tu Hijo:", ["-- Selecciona un equipo --"] + lista_equipos)
+        
+        if equipo_seleccionado != "-- Selecciona un equipo --":
+            # Filtrar los alumnos que pertenecen únicamente al equipo seleccionado
+            df_filtrado_equipo = df_usuarios[df_usuarios["Equipo"] == equipo_seleccionado]
+            lista_hijos = sorted([hj for hj in df_filtrado_equipo["Hijo_Jugador"].unique() if hj])
+            
+            # 2. Filtro dinámico de Alumnos correspondientes a ese equipo
+            hijo_seleccionado = st.selectbox("2. Selecciona el Nombre del Jugador (Hijo):", ["-- Selecciona al jugador --"] + lista_hijos)
+            
+            if hijo_seleccionado != "-- Selecciona al jugador --":
+                st.write("")
+                if st.button("Buscar mis Grabaciones", key="btn_buscar_por_equipo"):
                     
-                    if not usuario_encontrado.empty:
-                        # Extraemos la información del usuario del Excel
-                        nombre_papa = usuario_encontrado.iloc[0]["Nombre_Papa"]
-                        hijo = usuario_encontrado.iloc[0]["Hijo_Jugador"]
-                        equipo = usuario_encontrado.iloc[0]["Equipo"]
+                    # Buscamos la información del alumno seleccionado de forma interna
+                    usuario_info = df_filtrado_equipo[df_filtrado_equipo["Hijo_Jugador"] == hijo_seleccionado].iloc[0]
+                    documento_interno = str(usuario_info["Documento"]).strip()
+                    nombre_papa = usuario_info["Nombre_Papa"]
+                    
+                    st.success(f"¡Bienvenido(a) Familia de {hijo_seleccionado}!")
+                    st.markdown(f"👨‍👦 **Acudiente Registrado:** {nombre_papa} | 🏟️ **Equipo:** {equipo_seleccionado}")
+                    st.write("---")
+                    
+                    # Cruzamos el documento del alumno seleccionado con la tabla de grabaciones
+                    if not df_partidos.empty:
+                        df_partidos["Documento_Papa"] = df_partidos["Documento_Papa"].astype(str).str.strip()
+                        partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == documento_interno]
                         
-                        st.success(f"¡Bienvenido(a), {nombre_papa}!")
-                        st.markdown(f"🏃‍♂️ **Hijo / Jugador:** {hijo} | 🏟️ **Equipo:** {equipo}")
-                        st.write("---")
-                        
-                        # Buscamos y filtramos sus partidos correspondientes
-                        if not df_partidos.empty:
-                            df_partidos["Documento_Papa"] = df_partidos["Documento_Papa"].astype(str).str.strip()
-                            partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == documento_input]
+                        if not partidos_filtrados.empty:
+                            st.write("#### 🎥 Partidos y Enlaces Disponibles:")
                             
-                            if not partidos_filtrados.empty:
-                                st.write("#### 🎥 Tus Partidos y Enlaces Disponibles:")
-                                
-                                for idx, row in partidos_filtrados.iterrows():
-                                    with st.expander(f"📅 Partido vs {row['Rival/Partido']} ({row['Fecha']})"):
-                                        st.write(f"**Estatus del Video:** {row['Estatus_Grabacion']}")
-                                        st.write(f"**Estado del Pago:** {row['Estado_Pago']}")
-                                        
-                                        link_drive = row['Link_Download_Drive']
-                                        # Verificamos si ya hay un enlace real cargado en el Excel
-                                        if link_drive and str(link_drive).startswith("http"):
-                                            st.markdown(f"🎨 **[📥 CLIC AQUÍ PARA VER Y DESCARGAR EL VIDEO]({link_drive})**")
-                                        else:
-                                            st.info("🕒 La grabación se está procesando o está pendiente de pago. El enlace aparecerá aquí automáticamente.")
-                            else:
-                                st.info("ℹ️ No se encontraron partidos asignados a este documento por el momento.")
+                            for idx, row in partidos_filtrados.iterrows():
+                                with st.expander(f"📅 Partido vs {row['Rival/Partido']} ({row['Fecha']})"):
+                                    st.write(f"**Estatus de la Grabación:** {row['Estatus_Grabacion']}")
+                                    st.write(f"**Estado del Pago:** {row['Estado_Pago']}")
+                                    
+                                    link_drive = row['Link_Download_Drive']
+                                    if link_drive and str(link_drive).startswith("http"):
+                                        st.markdown(f"🎨 **[📥 CLIC AQUÍ PARA VER Y DESCARGAR EL VIDEO]({link_drive})**")
+                                    else:
+                                        st.info("🕒 Este video se está procesando o está pendiente de facturación. El enlace se activará automáticamente.")
                         else:
-                            st.info("ℹ️ No hay partidos cargados en el sistema general.")
+                            st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
                     else:
-                        st.error("❌ El número de documento ingresado no se encuentra registrado en nuestra base de datos actual.")
-                else:
-                    st.error("❌ Error de comunicación interna: No se pudo verificar la lista de usuarios.")
+                        st.info("ℹ️ No hay partidos registrados en el sistema general actualmente.")
+    else:
+        st.error("❌ Error de comunicación: No se encontraron datos dentro de la pestaña 'USUARIOS' del Excel.")
 
 # =====================================================================
 # SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BÚNKER)
@@ -129,7 +135,6 @@ with tab_padres:
 with tab_admin:
     st.write("### 🔑 Centro de Mando Focus")
     
-    # Caso A: El administrador NO ha iniciado sesión todavía (Muestra el formulario)
     if not st.session_state["admin_autenticado"]:
         st.write("Acceso restringido exclusivo para el equipo operativo de Focus by Accusport.")
         
@@ -140,22 +145,19 @@ with tab_admin:
             if "admins" in st.secrets:
                 dict_admins = st.secrets["admins"]
                 
-                # Comprobamos de manera segura si el usuario existe y si la clave coincide al 100%
                 if usuario_admin in dict_admins and clave_admin == str(dict_admins[usuario_admin]):
                     st.session_state["admin_autenticado"] = True
                     st.session_state["nombre_admin"] = usuario_admin.capitalize()
                     st.success("🔒 Acceso concedido. Cargando consola...")
-                    st.rerun() # Forzamos recarga inmediata para desbloquear el panel visual
+                    st.rerun()
                 else:
                     st.error("❌ Credenciales inválidas. Inténtalo de nuevo o contacta al administrador del sistema.")
             else:
                 st.error("🚨 Error del Servidor: No se encontró la base de credenciales '[admins]' en los Secrets de Streamlit.")
                 
-    # Caso B: El administrador YA inició sesión con éxito (Muestra las herramientas de control)
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state['nombre_admin']}**")
         
-        # Botón directo para salir del búnker
         if st.button("🔒 Cerrar Sesión del Panel"):
             st.session_state["admin_autenticado"] = False
             st.session_state["nombre_admin"] = ""
@@ -164,7 +166,6 @@ with tab_admin:
         st.write("---")
         st.write("#### 📊 Monitor de Base de Datos en Tiempo Real")
         
-        # Selector de datos para auditar el Google Sheet directamente desde Streamlit
         opcion_tabla = st.radio(
             "Selecciona la base de datos que deseas auditar:", 
             ["Ver Tabla de Usuarios (Papás)", "Ver Tabla de Partidos (Grabaciones y Enlaces)"]
