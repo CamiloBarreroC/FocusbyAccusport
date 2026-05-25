@@ -1,3 +1,2 @@
-Plaintext
 gspread
 pandas
