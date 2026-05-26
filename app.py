@@ -170,6 +170,8 @@ with tab_padres:
                             st.info("🕒 Los realizadores audiovisuales están procesando y optimizando el video de este partido. ¡Disponible muy pronto!")
             else:
                 st.info(f"ℹ️ No hay videos cargados ni filmaciones programadas para este equipo todavía.")
+        else:
+            st.error("❌ Error de comunicación con la tabla multimedia.")
     else:
         st.write("### 🔍 Ingresa a Focus Play")
         st.write("Selecciona tu categoría para acceder a la videoteca exclusiva de partidos.")
@@ -245,19 +247,19 @@ with tab_admin:
         )
         st.write("---")
         
-        # TABLERO DE CONTROL FINANCIERO
+        # 📈 TABLERO DE CONTROL FINANCIERO (CORREGIDO DE REÍZ AQUÍ 🚀)
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
             df_m = obtener_datos_pestana("PAGOS_MENSUALES")
             
             total_partidos = 0
-            if not df_p.empty && "Recaudado" in df_p.columns:
+            if not df_p.empty and "Recaudado" in df_p.columns:
                 df_p["Recaudado"] = pd.to_numeric(df_p["Recaudado"], errors="coerce").fillna(0)
                 total_partidos = df_p["Recaudado"].sum()
                 
             total_mensualidades = 0
-            if not df_m.empty && "Monto" in df_m.columns:
+            if not df_m.empty and "Monto" in df_m.columns:
                 df_m["Monto"] = pd.to_numeric(df_m["Monto"], errors="coerce").fillna(0)
                 if "Estado" in df_m.columns:
                     total_mensualidades = df_m[df_m["Estado"] == "Pagado"]["Monto"].sum()
@@ -296,7 +298,7 @@ with tab_admin:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado!")
 
-        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO) - CORREGIDO AQUÍ 🚀
+        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             calendar_id_input = st.text_input("ID o Correo de Google Calendar Destino:", value="primary")
