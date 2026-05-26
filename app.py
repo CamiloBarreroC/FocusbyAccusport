@@ -221,7 +221,6 @@ with tab_admin:
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
         
-        # Sincronizador nativo de primera fila fijo
         with st.expander("🔗 SINCRONIZAR AGENDA CON GOOGLE CALENDAR (CELULAR)", expanded=False):
             st.write("Vincula el calendario corporativo de Focus directamente a las pantallas de tus dispositivos.")
             if FOCUS_CALENDAR_DEFAULT:
@@ -235,7 +234,6 @@ with tab_admin:
             
         st.write("---")
         
-        # Menú administrativamente perfecto ordenado del 1 al 4 cronológicamente 🚀
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
@@ -249,7 +247,7 @@ with tab_admin:
         )
         st.write("---")
         
-        # TABLERO DE CONTROL FINANCIERO (Sintaxis Python and purificada)
+        # TABLERO DE CONTROL FINANCIERO
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
@@ -300,10 +298,10 @@ with tab_admin:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado con éxito!")
 
-        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
+        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO + UPSELLING AUTOMÁTICO 🚀)
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
-            st.write(f"📢 *Sincronización vinculada automáticamente al calendario maestro de Focus:* `{FOCUS_CALENDAR_DEFAULT}`")
+            st.write(f"📢 *Sincronización vinculada automáticamente al calendario de Focus:* `{FOCUS_CALENDAR_DEFAULT}`")
             st.write("---")
             
             fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
@@ -314,28 +312,43 @@ with tab_admin:
             if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
             if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
-            
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
-            rival_sel = st.text_input("Título del Contenido (Ej: vs Millonarios FC - Partido Completo):")
+            
+            # 🔥 AJUSTE ESTRATÉGICO: Rival (Texto Libre) + Formato del Producto (Dropdown cerrado)
+            rival_nombre_libre = st.text_input("Nombre del Rival (Texto Libre):", placeholder="Ej: Millonarios FC, Los de Siempre, Amigos de Fauto")
+            
+            producto_formato_cerrado = st.selectbox(
+                "Tipo de Contenido / Producto Focus (Catálogo Comercial):",
+                [
+                    "🎥 Partido Completo (Servicio Colectivo)",
+                    "⚽ Solo Goles del Equipo (Servicio Colectivo)",
+                    "📊 Reporte de Scouting VIP (Upselling Individual)",
+                    "🔥 Video de Goles Personalizado (Upselling Individual)"
+                ]
+            )
+            
             estatus_sel = st.selectbox("Estatus del Video:", ["Listo", "Procesando"])
             link_sel = st.text_input("Enlace del Archivo en Google Drive:", value="https://drive.google.com")
             recaudo_sel = st.number_input("Monto Recaudado por esta Venta ($ COP):", min_value=0, value=0, step=10000)
             
-            sincronizar_google = st.checkbox("⚡ ¿Replicar y agendar este partido en el Google Calendar operativo automáticamente?", value=True)
+            sincronizar_google = st.checkbox("⚡ ¿Replicar y agendar este partido en los Google Calendars automáticamente?", value=True)
             
             if st.button("💾 Procesar y Publicar en la Plataforma", width='stretch'):
-                if rival_sel:
+                if rival_nombre_libre:
+                    # Combinamos inteligentemente el texto libre y la opción cerrada para armar el título final
+                    titulo_combinado_final = f"vs {rival_nombre_libre} - {producto_formato_cerrado}"
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
-                    exito_excel = agregar_fila_excel("PARTIDOS", [equipo_sel, fecha_str, rival_sel, estatus_sel, link_sel, recaudo_sel])
+                    
+                    exito_excel = agregar_fila_excel("PARTIDOS", [equipo_sel, fecha_str, titulo_combinado_final, estatus_sel, link_sel, recaudo_sel])
                     
                     if exito_excel:
                         st.success("✅ Guardado con éxito en el sistema de streaming para las familias.")
                         if sincronizar_google:
-                            crear_evento_google_calendar(FOCUS_CALENDAR_DEFAULT, rival_sel, fecha_sel, equipo_sel)
-                            st.success("📅 Alerta enviada con éxito a la cuenta del Google Calendar operativo.")
+                            crear_evento_google_calendar(FOCUS_CALENDAR_DEFAULT, titulo_combinado_final, fecha_sel, equipo_sel)
+                            st.success("📅 Alerta enviada con éxito a tu Google Calendar operativo.")
                         st.balloons()
                 else:
-                    st.error("⚠️ Asigna un título al contenido.")
+                    st.error("⚠️ Por favor escribe el nombre del rival para poder procesar la publicación.")
 
         # 4. REGISTRAR COBRO MENSUAL (VIP)
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
