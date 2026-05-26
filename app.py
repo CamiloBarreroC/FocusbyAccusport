@@ -215,13 +215,18 @@ with tab_admin:
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
         
-        # 🚀 UBICACIÓN SUPREMA: El sincronizador de Google Calendar ahora está fijo aquí arriba para todo el Staff
+        # 🚀 CONTROL INTELIGENTE DE SINCRONIZACIÓN DE GOOGLE CALENDAR
         with st.expander("🔗 SINCRONIZAR AGENDA CON GOOGLE CALENDAR (CELULAR)", expanded=False):
-            st.write("Ingresa el ID del calendario y dale clic al botón para enlazarlo nativamente a tu dispositivo.")
-            cal_id_fijo = st.text_input("ID del Google Calendar a Vincular:", value="primary", key="cal_fijo_key")
-            if cal_id_fijo:
+            st.write("Ingresa el ID o Correo del calendario para enlazarlo nativamente a tu dispositivo.")
+            cal_id_fijo = st.text_input("Correo electrónico de tu Google Calendar:", placeholder="Ej: contacto@accusport.com o tu-correo@gmail.com", key="cal_fijo_key").strip()
+            
+            if cal_id_fijo and cal_id_fijo.lower() != "primary":
+                # Si ingresan un correo válido, generamos el enlace de Google renderizado perfectamente
                 url_sincro_fijo = f"https://calendar.google.com/calendar/render?cid={cal_id_fijo}"
                 st.link_button("💥 VINCULAR ESTE CALENDARIO A MI GOOGLE CALENDAR PERSONAL", url_sincro_fijo, width='stretch')
+            else:
+                # Si dice 'primary' o está vacío, le explicamos amigablemente qué debe poner
+                st.info("💡 **Para activar el botón de sincronización:** Borra la palabra 'primary' de arriba y escribe el correo electrónico real de tu cuenta de Google Calendar (ej: `gerencia@accusport.com`).")
         
         if st.button("🔒 Cerrar Sesión del Panel"):
             st.session_state["admin_autenticado"] = False
@@ -269,7 +274,7 @@ with tab_admin:
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             
-            calendar_id_input = st.text_input("ID del Google Calendar Destino:", value="primary")
+            calendar_id_input = st.text_input("ID o Correo de Google Calendar Destino:", value="primary")
             st.write("---")
             fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
             
