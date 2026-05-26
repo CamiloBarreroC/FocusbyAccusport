@@ -47,12 +47,10 @@ def obtener_datos_pestana(nombre_pestana):
             if not df.empty:
                 df.columns = df.columns.astype(str).str.strip()
             return df
-        except Exception as e:
-            # Si la pestaña de pagos mensuales no existe todavía, creamos un DF vacío seguro
+        except Exception:
             return pd.DataFrame()
     return pd.DataFrame()
 
-# 🚀 FUNCIONES DE ESCRITURA DIRECTA DESDE LA APP HACIA LAS 3 PESTAÑAS
 def agregar_fila_excel(nombre_pestana, lista_datos):
     client = conectar_google_sheets()
     if client:
@@ -74,7 +72,7 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["📅 Calendario para Padres", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DE PADRES (CALENDARIO IMPECABLE)
+# SECCIÓN 1: INTERFAZ DE PADRES (CALENDARIO E HISTORIAL DE VIDEOS)
 # =====================================================================
 with tab_padres:
     if st.session_state["ver_galeria"]:
@@ -105,19 +103,24 @@ with tab_padres:
                     es_fecha_futura = pd.notnull(row['Fecha_Datetime']) and row['Fecha_Datetime'].date() > datetime.now().date()
                     
                     with st.container(border=True):
-                        if es_fecha_futura:
+                        # Validación estética de tarjetas
+                        if "bienvenidos a focus" in rival.lower():
+                            st.markdown(f"✨ **BIENVENIDA OFICIAL A LA CATEGORÍA**")
+                        elif es_fecha_futura:
                             st.markdown(f"🗓️ **PRÓXIMO ENCUENTRO PROGRAMADO**")
                         elif estatus == "listo":
                             st.markdown(f"✅ **PARTIDO GRABADO Y DISPONIBLE**")
                         else:
                             st.markdown(f"⏳ **PARTIDO EN PROCESO DE EDICIÓN**")
                             
-                        st.markdown(f"## 🆚 vs {rival}")
+                        st.markdown(f"## {rival if 'bienvenidos' in rival.lower() else '🆚 vs ' + rival}")
                         st.markdown(f"📅 **Fecha:** {fecha_str}")
                         st.write("---")
                         
-                        if es_fecha_futura:
-                            st.info("🎯 Este partido está programado en la agenda.")
+                        if "bienvenidos a focus" in rival.lower():
+                            st.info("👋 ¡Hola Familias! Bienvenidos al portal de Focus. En esta pantalla encontrarán todas las grabaciones, análisis y resúmenes de goles de la temporada. ¡Asegúrense de estar al día con su suscripción!")
+                        elif es_fecha_futura:
+                            st.info("🎯 Este encuentro está programado en la agenda Focus. Las cámaras están listas.")
                         elif estatus == "listo":
                             if link_drive and "drive.google.com" in link_drive:
                                 video_id = None
@@ -130,25 +133,37 @@ with tab_padres:
                                         embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
                                         components.iframe(embed_url, height=450, scrolling=False)
                                         st.write("")
-                                        st.link_button("📥 DESCARGAR VIDEO ORIGINAL", link_drive, use_container_width=True)
+                                        st.link_button("📥 DESCARGAR VIDEO ORIGINAL (ALTA DEFINICIÓN)", link_drive, use_container_width=True)
                                 except Exception:
-                                    st.link_button("📺 VER REPRODUCCIÓN", link_drive, use_container_width=True)
+                                    st.link_button("📺 VER REPRODUCCIÓN EXTERNA", link_drive, use_container_width=True)
                         else:
-                            st.info("🕒 Procesando archivos multimedia...")
+                            st.info("🕒 Nuestro equipo técnico está procesando los archivos multimedia...")
             else:
                 st.info(f"ℹ️ No hay partidos en la agenda de este equipo.")
     else:
         st.write("### 🔍 Selecciona tu Categoría")
-        df_partidos_init = obtener_datos_pestana("PARTIDOS")
-        if not df_partidos_init.empty and "Equipo" in df_partidos_init.columns:
-            df_partidos_init["Equipo"] = df_partidos_init["Equipo"].astype(str).str.strip()
-            lista_equipos = sorted([eq for eq in df_partidos_init["Equipo"].unique() if eq])
+        
+        # Combinamos los equipos de USUARIOS y PARTIDOS para asegurar cobertura global total
+        df_p_init = obtener_datos_pestana("PARTIDOS")
+        df_u_init = obtener_datos_pestana("USUARIOS")
+        
+        set_equipos = set()
+        if not df_p_init.empty and "Equipo" in df_p_init.columns:
+            set_equipos.update(df_p_init["Equipo"].astype(str).str.strip().unique())
+        if not df_u_init.empty and "Equipo" in df_u_init.columns:
+            set_equipos.update(df_u_init["Equipo"].astype(str).str.strip().unique())
+            
+        lista_equipos = sorted([eq for eq in set_equipos if eq and eq != "None"])
+        
+        if lista_equipos:
             equipo_seleccionado = st.selectbox("Selecciona tu Equipo / Categoría:", ["-- Selecciona un equipo --"] + lista_equipos)
             if equipo_seleccionado != "-- Selecciona un equipo --":
                 if st.button("🚀 ABRIR CALENDARIO DEL EQUIPO", use_container_width=True):
                     st.session_state["equipo_activo"] = equipo_seleccionado
                     st.session_state["ver_galeria"] = True
                     st.rerun()
+        else:
+            st.error("❌ Aún no hay categorías creadas en el sistema. Inicia sesión como administrador para crear el primer equipo.")
 
 # =====================================================================
 # SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BÚNKER)
@@ -177,123 +192,142 @@ with tab_admin:
             
         st.write("---")
         
-        # 📊 MENÚ DE OPCIONES DEL SUPER ADMINISTRADOR (ERP)
+        # ERP DE ACCIONES ADMINISTRATIVAS REORDENADO DE GLOBAL A UPSELLING
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
                 "📈 Tablero de Control Financiero (Balance)",
-                "⚽ Registrar Partido y Recaudo",
-                "💰 Registrar Cobro Mensual (Equipos Suscritos)",
-                "👤 Agregar Nuevo Jugador / Papá",
+                "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)",
+                "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)",
+                "⚽ 3. Registrar Partido / Upselling de Goles (OPERATIVO)",
+                "💰 4. Registrar Cobro Mensual (Clubes VIP)",
                 "👁️ Auditar Hojas de Excel en Vivo"
             ]
         )
         st.write("---")
         
-        # 💰 1. TABLERO DE CONTROL FINANCIERO (RESUMEN EN TIEMPO REAL)
+        # BALANCE GENERAL
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
-            
             df_p = obtener_datos_pestana("PARTIDOS")
             df_m = obtener_datos_pestana("PAGOS_MENSUALES")
             
-            # Cálculo de Recaudo por Partidos
             total_partidos = 0
             if not df_p.empty and "Recaudado" in df_p.columns:
                 df_p["Recaudado"] = pd.to_numeric(df_p["Recaudado"], errors="coerce").fillna(0)
                 total_partidos = df_p["Recaudado"].sum()
                 
-            # Cálculo de Recaudo por Suscripciones Mensuales
             total_mensualidades = 0
             if not df_m.empty and "Monto" in df_m.columns:
                 df_m["Monto"] = pd.to_numeric(df_m["Monto"], errors="coerce").fillna(0)
-                # Solo sumamos las que digan "Pagado"
                 if "Estado" in df_m.columns:
                     total_mensualidades = df_m[df_m["Estado"] == "Pagado"]["Monto"].sum()
             
-            # Métricas en Bloques Visuales Elegantes
             col1, col2, col3 = st.columns(3)
-            col1.metric("💵 Recaudo por Partidos", f"${total_partidos:,.0f} COP")
+            col1.metric("💵 Recaudo Partidos / Goles", f"${total_partidos:,.0f} COP")
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
-            col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP", delta="En Crecimiento")
+            col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP", delta="Activo")
             
-        # ⚽ 2. FORMULARIO: REGISTRAR PARTIDO Y RECAUDO
-        elif opcion_admin == "⚽ Registrar Partido y Recaudo":
-            st.write("#### 📝 Cargar Encuentro y Plata Recaudada")
+        # 🔥 EL ESLABÓN PERDIDO: 1. INICIALIZAR NUEVO EQUIPO (GLOBAL)
+        elif opcion_admin == "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)":
+            st.write("#### 🛡️ Alta de Categorías en la Plataforma Focus")
+            st.write("Usa este formulario para crear un equipo desde cero. Esto activará la categoría en los menús de inmediato.")
             
-            fecha_sel = st.date_input("Fecha del Partido:", datetime.now())
-            df_u = obtener_datos_pestana("USUARIOS")
-            lista_eq = sorted(list(df_u["Equipo"].unique())) if not df_u.empty else ["Fortaleza2017-b"]
+            nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
             
-            equipo_sel = st.selectbox("Categoría / Equipo:", lista_eq)
-            rival_sel = st.text_input("Rival o Descripción del Clip:", placeholder="Ej: Millonarios FC")
-            estatus_sel = st.selectbox("Estatus del Video:", ["Listo", "Procesando"])
-            link_sel = st.text_input("Enlace de Video de Google Drive:")
+            st.write("")
+            if st.button("🚀 INICIALIZAR Y ACTIVAR EQUIPO", use_container_width=True):
+                if nuevo_equipo_nombre:
+                    fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
+                    # Creamos una fila de bienvenida en la tabla de partidos para inicializar la categoría
+                    exito = agregar_fila_excel(
+                        "PARTIDOS", 
+                        [nuevo_equipo_nombre, fecha_hoy_str, "✨ ¡Bienvenidos a Focus por Accusport!", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0]
+                    )
+                    if exito:
+                        st.success(f"¡Excelente, Camilo! El equipo **{nuevo_equipo_nombre}** ya está oficialmente activo en internet y listo para recibir jugadores o partidos.")
+                        st.balloons()
+                else:
+                    st.error("⚠️ Debes escribir el nombre del equipo para poder crearlo.")
+
+        # 2. AGREGAR JUGADOR / PAPÁ (GRUPAL)
+        elif opcion_admin == "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)":
+            st.write("#### 📝 Registro de Clientes en Directorio")
+            nombre_papa = st.text_input("Nombre Completo del Papá / Acudiente:")
+            nombre_hijo = st.text_input("Nombre Completo del Jugador (Hijo):")
             
-            # 🔥 NUEVO CAMPO FINANCIERO: Cuánto se hizo en este partido
-            recaudo_sel = st.number_input("Monto Recaudado por este Partido ($ COP):", min_value=0, value=0, step=10000)
+            # Traemos la lista de equipos creados dinámicamente
+            df_p_init = obtener_datos_pestana("PARTIDOS")
+            df_u_init = obtener_datos_pestana("USUARIOS")
+            set_eqs = set()
+            if not df_p_init.empty and "Equipo" in df_p_init.columns:
+                set_eqs.update(df_p_init["Equipo"].unique())
+            if not df_u_init.empty and "Equipo" in df_u_init.columns:
+                set_eqs.update(df_u_init["Equipo"].unique())
+            lista_eq_u = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             
-            if st.button("💾 Registrar Partido", use_container_width=True):
+            equipo_u = st.selectbox("Asignar al Equipo / Categoría:", lista_eq_u)
+                
+            if st.button("💾 Guardar Cliente", use_container_width=True):
+                if nombre_papa and nombre_hijo:
+                    exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
+                    if exito:
+                        st.success(f"👤 ¡Jugador {nombre_hijo} guardado en la base de {equipo_u}!")
+                else:
+                    st.error("⚠️ Por favor rellena todos los campos.")
+
+        # 3. REGISTRAR PARTIDO / UPSELLING (OPERATIVO E INDIVIDUAL)
+        elif opcion_admin == "⚽ 3. Registrar Partido / Upselling de Goles (OPERATIVO)":
+            st.write("#### 📝 Cargar Evento Multimedia (Partido Completo o Reporte Individual)")
+            
+            fecha_sel = st.date_input("Fecha del Evento:", datetime.now())
+            
+            df_p_init = obtener_datos_pestana("PARTIDOS")
+            df_u_init = obtener_datos_pestana("USUARIOS")
+            set_eqs = set()
+            if not df_p_init.empty and "Equipo" in df_p_init.columns:
+                set_eqs.update(df_p_init["Equipo"].unique())
+            if not df_u_init.empty and "Equipo" in df_u_init.columns:
+                set_eqs.update(df_u_init["Equipo"].unique())
+            lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
+            
+            equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
+            
+            rival_sel = st.text_input(
+                "Título del Video (¡Aquí manejas el Upselling!):", 
+                placeholder="Ej: vs Millonarios FC (Partido Completo) o 📊 Reporte VIP - Matías Barrero"
+            )
+            estatus_sel = st.selectbox("Estatus de Publicación:", ["Listo", "Procesando"])
+            link_sel = st.text_input("Enlace del Archivo de Video en Google Drive:")
+            recaudo_sel = st.number_input("Monto Recaudado por esta Venta ($ COP):", min_value=0, value=0, step=10000)
+            
+            if st.button("💾 Registrar en Agenda", use_container_width=True):
                 if rival_sel and link_sel:
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
                     exito = agregar_fila_excel("PARTIDOS", [equipo_sel, fecha_str, rival_sel, estatus_sel, link_sel, recaudo_sel])
                     if exito:
-                        st.success("⚽ ¡Partido y recaudo financiero agendados correctamente!")
+                        st.success("⚽ ¡Registro multimedia y financiero guardado!")
                         st.balloons()
                 else:
-                    st.error("⚠️ Completa el rival y el link de Drive.")
+                    st.error("⚠️ Completa el título y el link de Drive.")
 
-        # 💰 3. FORMULARIO: REGISTRAR SUSCRIPCIÓN MENSUAL DE EQUIPOS
-        elif opcion_admin == "💰 Registrar Cobro Mensual (Equipos Suscritos)":
+        # 4. REGISTRAR COBRO MENSUAL (CLUBES VIP)
+        elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
             st.write("#### 💳 Control de Mensualidades de Clubes VIP")
-            st.write("Registra los pagos fijos de los equipos que te contratan por meses completos.")
-            
-            df_u = obtener_datos_pestana("USUARIOS")
-            lista_eq_m = sorted(list(df_u["Equipo"].unique())) if not df_u.empty else ["Fortaleza2017-b"]
+            df_p_init = obtener_datos_pestana("PARTIDOS")
+            df_u_init = obtener_datos_pestana("USUARIOS")
+            set_eqs = set()
+            if not df_p_init.empty and "Equipo" in df_p_init.columns:
+                set_eqs.update(df_p_init["Equipo"].unique())
+            if not df_u_init.empty and "Equipo" in df_u_init.columns:
+                set_eqs.update(df_u_init["Equipo"].unique())
+            lista_eq_m = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             
             equipo_m = st.selectbox("Selecciona el Equipo:", lista_eq_m)
-            mes_m = st.selectbox("Mes de Cobertura:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
-            monto_m = st.number_input("Valor de la Mensualidad ($ COP):", min_value=0, value=350000, step=50000)
-            estado_m = st.selectbox("Estado del Pago:", ["Pagado", "Pendiente"])
+            mes_m = st.selectbox("Mes Cobrado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
+            monto_m = st.number_input("Monto de la Mensualidad ($ COP):", min_value=0, value=350000, step=50000)
+            estado_m = st.selectbox("Estado de Caja:", ["Pagado", "Pendiente"])
             
             if st.button("💾 Guardar Registro Mensual", use_container_width=True):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
-                if exito:
-                    st.success(f"💳 ¡Mensualidad del mes de {mes_m} para {equipo_m} registrada con éxito!")
-                    st.balloons()
-
-        # 👤 4. FORMULARIO: AGREGAR NUEVO JUGADOR / PAPÁ DESDE LA APP
-        elif opcion_admin == "👤 Agregar Nuevo Jugador / Papá":
-            st.write("#### 📝 Registro de Nuevos Clientes (Directorio)")
-            st.write("Ingresa un nuevo alumno para alimentar tu base de datos de usuarios sin abrir Excel.")
-            
-            nombre_papa = st.text_input("Nombre Completo del Papá / Acudiente:")
-            nombre_hijo = st.text_input("Nombre Completo del Jugador (Hijo):")
-            
-            # Permitir escribir una categoría nueva o elegir una existente
-            df_u = obtener_datos_pestana("USUARIOS")
-            lista_eq_u = list(df_u["Equipo"].unique()) if not df_u.empty else []
-            
-            opcion_eq = st.radio("¿El equipo ya existe?", ["Elegir un equipo existente", "Crear una nueva categoría/equipo"])
-            if opcion_eq == "Elegir un equipo existente" and lista_eq_u:
-                equipo_u = st.selectbox("Selecciona el Equipo:", sorted(lista_eq_u))
-            else:
-                equipo_u = st.text_input("Escribe el nombre de la nueva categoría:", placeholder="Ej: SantaFe-2015")
-                
-            if st.button("💾 Guardar Cliente en Base de Datos", use_container_width=True):
-                if nombre_papa and nombre_hijo and equipo_u:
-                    exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u.strip()])
-                    if exito:
-                        st.success(f"👤 ¡{nombre_hijo} asignado a {equipo_u} guardado con éxito!")
-                else:
-                    st.error("⚠️ Por favor rellena todos los campos.")
-
-        # 👁️ 5. INSPECCIÓN TRADICIONAL DE TABLAS
-        elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
-            tabla_sel = st.radio("Elige la base de datos a auditar:", ["USUARIOS", "PARTIDOS", "PAGOS_MENSUALES"])
-            df_audit = obtener_datos_pestana(tabla_sel)
-            if not df_audit.empty:
-                st.write(f"**Mostrando {len(df_audit)} filas de la pestaña {tabla_sel}:**")
-                st.dataframe(df_audit, use_container_width=True)
-            else:
-                st.warning(f"⚠️ La pestaña '{tabla_sel}' está vacía o no tiene registros aún.")
+                if
