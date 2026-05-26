@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 # =====================================================================
 CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4" 
 
-# 🚀 ID MAESTRO DE TU GOOGLE CALENDAR FOCUS BY ACCUSPORT INCORPORADO:
+# 🚀 ID MAESTRO DE TU GOOGLE CALENDAR FOCUS BY ACCUSPORT:
 FOCUS_CALENDAR_DEFAULT = "c_3df55a2bb225d2a2d2054496334a5d7c7f9afca3f9099aea782b278fd9f45472@group.calendar.google.com"
 # =====================================================================
 
@@ -137,19 +137,26 @@ with tab_padres:
                     
                     es_fecha_futura = pd.notnull(row['Fecha_Datetime']) and row['Fecha_Datetime'].date() > datetime.now().date()
                     
+                    # 🚀 FILTRO INTELIGENTE: Evita el "vs vs" visual si el texto de la celda ya trae un "vs" manual
+                    texto_rival_limpio = rival.strip()
+                    if texto_rival_limpio.lower().startswith("vs "):
+                        texto_rival_limpio = texto_rival_limpio[3:].strip()
+                    elif texto_rival_limpio.lower().startswith("vs"):
+                        texto_rival_limpio = texto_rival_limpio[2:].strip()
+                    
                     with st.container(border=True):
                         if "bienvenidos a focus" in rival.lower():
                             st.markdown(f"✨ **BIENVENIDA OFICIAL A TU GALERÍA**")
                             st.markdown(f"## {rival}")
                         elif es_fecha_futura:
                             st.markdown(f"🎥 **COBERTURA EN VIVO PROGRAMADA**")
-                            st.markdown(f"## 🆚 {rival}")
+                            st.markdown(f"## 🆚 {texto_rival_limpio}")
                         elif estatus == "listo":
                             st.markdown(f"✅ **TRANSMISIÓN DISPONIBLE EN ALTA DEFINICIÓN**")
-                            st.markdown(f"## 🆚 {rival}")
+                            st.markdown(f"## 🆚 {texto_rival_limpio}")
                         else:
                             st.markdown(f"⏳ **VIDEO EN PROCESO DE EDICIÓN MULTIMEDIA**")
-                            st.markdown(f"## 🆚 {rival}")
+                            st.markdown(f"## 🆚 {texto_rival_limpio}")
                             
                         st.markdown(f"📅 **Fecha del Encuentro:** {fecha_str}")
                         st.write("---")
@@ -159,7 +166,6 @@ with tab_padres:
                         elif es_fecha_futura:
                             st.info("🎯 Nuestro equipo técnico ya tiene agendado este partido. Las cámaras de Accusport estarán listas en la cancha.")
                         elif estatus == "listo":
-                            # REPRODUCTOR INTELIGENTE OPTIMIZADO CONTRA ERRORES
                             if link_drive and "drive.google.com" in link_drive:
                                 video_id = None
                                 try:
@@ -258,16 +264,17 @@ with tab_admin:
         )
         st.write("---")
         
-        # TABLERO DE CONTROL FINANCIERO
+        # 📈 TABLERO DE CONTROL FINANCIERO (VINCULADO A LA COLUMNA 'Recaudo' REAL 🚀)
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
             df_m = obtener_datos_pestana("PAGOS_MENSUALES")
             
             total_partidos = 0
-            if not df_p.empty and "Recaudado" in df_p.columns:
-                df_p["Recaudado"] = pd.to_numeric(df_p["Recaudado"], errors="coerce").fillna(0)
-                total_partidos = df_p["Recaudado"].sum()
+            # Corregido de 'Recaudado' a 'Recaudo' para hacer match perfecto con tu Sheet
+            if not df_p.empty and "Recaudo" in df_p.columns:
+                df_p["Recaudo"] = pd.to_numeric(df_p["Recaudo"], errors="coerce").fillna(0)
+                total_partidos = df_p["Recaudo"].sum()
                 
             total_mensualidades = 0
             if not df_m.empty and "Monto" in df_m.columns:
@@ -361,7 +368,7 @@ with tab_admin:
                 else:
                     st.error("⚠️ Por favor escribe el nombre del rival.")
 
-        # 4. REGISTRAR COBRO MENSUAL (VIP) - REPARADO AQUÍ CORREGIDO EL TYPO 🚀
+        # 4. REGISTRAR COBRO MENSUAL (VIP)
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
             st.write("#### 💳 Control de Mensualidades de Clubes VIP")
             df_p_init = obtener_datos_pestana("PARTIDOS")
