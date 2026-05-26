@@ -126,18 +126,31 @@ with tab_padres:
             partidos_filtrados = df_partidos[df_partidos["Equipo"] == equipo].copy()
             
             if not partidos_filtrados.empty:
+                # Procesamiento robusto de fechas
                 partidos_filtrados['Fecha_Datetime'] = pd.to_datetime(partidos_filtrados['Fecha'], errors='coerce', dayfirst=True)
                 partidos_filtrados = partidos_filtrados.sort_values(by='Fecha_Datetime', ascending=False)
                 
                 for idx, row in partidos_filtrados.iterrows():
-                    rival = row.get('Rival/Partido', 'Rival Desconocido')
-                    fecha_str = row.get('Fecha', 'S/F')
-                    estatus = str(row.get('Estatus_Grabacion', 'Procesando')).lower()
-                    link_drive = str(row.get('Link_Download_Drive', '')).strip()
-                    
+                    # 🚀 SCANNER INTELIGENTE DE COLUMNAS (Mapea los datos sin importar errores de nombres en el Excel)
+                    rival = "Rival Desconocido"
+                    fecha_str = "S/F"
+                    estatus = "procesando"
+                    link_drive = ""
+
+                    for col in row.index:
+                        col_lower = str(col).lower()
+                        if "rival" in col_lower or "partido" in col_lower:
+                            rival = str(row[col]).strip()
+                        elif "fecha" in col_lower:
+                            fecha_str = str(row[col]).strip()
+                        elif "estatus" in col_lower or "estado" in col_lower or "grabacion" in col_lower:
+                            estatus = str(row[col]).strip().lower()
+                        elif "link" in col_lower or "drive" in col_lower or "download" in col_lower or "enlace" in col_lower:
+                            link_drive = str(row[col]).strip()
+
                     es_fecha_futura = pd.notnull(row['Fecha_Datetime']) and row['Fecha_Datetime'].date() > datetime.now().date()
                     
-                    # 🚀 FILTRO INTELIGENTE: Evita el "vs vs" visual si el texto de la celda ya trae un "vs" manual
+                    # Filtro anti-redundancia de nombres
                     texto_rival_limpio = rival.strip()
                     if texto_rival_limpio.lower().startswith("vs "):
                         texto_rival_limpio = texto_rival_limpio[3:].strip()
@@ -264,17 +277,17 @@ with tab_admin:
         )
         st.write("---")
         
-        # 📈 TABLERO DE CONTROL FINANCIERO (VINCULADO A LA COLUMNA 'Recaudo' REAL 🚀)
+        # TABLERO DE CONTROL FINANCIERO SCANEADO
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
             df_m = obtener_datos_pestana("PAGOS_MENSUALES")
             
             total_partidos = 0
-            # Corregido de 'Recaudado' a 'Recaudo' para hacer match perfecto con tu Sheet
-            if not df_p.empty and "Recaudo" in df_p.columns:
-                df_p["Recaudo"] = pd.to_numeric(df_p["Recaudo"], errors="coerce").fillna(0)
-                total_partidos = df_p["Recaudo"].sum()
+            col_dinero = [c for c in df_p.columns if "recaudo" in str(c).lower() or "recaudado" in str(c).lower()]
+            if not df_p.empty and col_dinero:
+                df_p[col_dinero[0]] = pd.to_numeric(df_p[col_dinero[0]], errors="coerce").fillna(0)
+                total_partidos = df_p[col_dinero[0]].sum()
                 
             total_mensualidades = 0
             if not df_m.empty and "Monto" in df_m.columns:
@@ -287,7 +300,7 @@ with tab_admin:
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
             col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP")
             
-        # 1. AÑADIR EQUIPO (GLOBAL)
+        # 🚀 1. AÑADIR EQUIPO (TEXTO ACTUALIZADO COMO PEDISTE)
         elif opcion_admin == "🛡️ 1. Añadir Equipo (GLOBAL)":
             st.write("#### 🛡️ Registrar y Activar un Nuevo Equipo en Focus")
             nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
