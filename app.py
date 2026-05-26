@@ -15,7 +15,7 @@ CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4"
 # 🚀 ID MAESTRO DE TU GOOGLE CALENDAR FOCUS BY ACCUSPORT:
 FOCUS_CALENDAR_DEFAULT = "c_3df55a2bb225d2a2d2054496334a5d7c7f9afca3f9099aea782b278fd9f45472@group.calendar.google.com"
 
-# 🖼️ RUTAS EXACTAS DE LOS ARCHIVOS QUE ACABAS DE SUBIR:
+# 🖼️ RUTAS EXACTAS DE LOS ARCHIVOS QUE YA SUBISTE A TU REPOSITORIO:
 PATH_LOGO_FOCUS = "IMG-20260521-WA0004.jpg" 
 PATH_LOGO_ACCUSPORT = "logonew.png"
 # =====================================================================
@@ -168,22 +168,16 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
     return False
 
 # =====================================================================
-# 📐 CABECERA DE MARCA - COLUMNAS DE LOGOS CON RUTA REAL
+# 📐 CABECERA DE MARCA - SOLO LOGO FOCUS CENTRADO
 # =====================================================================
-col_brand_left, col_brand_right = st.columns([2.5, 1.5])
-
-with col_brand_left:
+# Usamos columnas para centrar la imagen principal
+_, col_logo_center, _ = st.columns([1, 4, 1])
+with col_logo_center:
     try:
-        st.image(PATH_LOGO_FOCUS, width=280)
+        # Mostramos el logo de Focus ocupando buen ancho centrado
+        st.image(PATH_LOGO_FOCUS, use_container_width=True)
     except Exception:
-        st.markdown("<h1 style='margin:0; font-size:45px; letter-spacing:-1px; color:#ffffff;'>⚡ FO<span style='color:#ff5500;'>CUS</span></h1>", unsafe_allow_html=True)
-
-with col_brand_right:
-    try:
-        st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
-        st.image(PATH_LOGO_ACCUSPORT, width=160)
-    except Exception:
-        st.markdown("<p style='text-align:right; margin-top:35px; font-size:12px; color:#888888; font-weight:700; letter-spacing:1px;'>by ACCUSPORT</p>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align:center; margin:0; font-size:45px; letter-spacing:-1px; color:#ffffff;'>⚡ FO<span style='color:#ff5500;'>CUS</span></h1>", unsafe_allow_html=True)
 
 st.write("---")
 
@@ -501,3 +495,16 @@ with tab_admin:
             if not df_audit.empty:
                 st.write(f"**Mostrando {len(df_audit)} filas de la pestaña {tabla_sel}:**")
                 st.dataframe(df_audit, use_container_width=True)
+
+# =====================================================================
+# 🦶 PIE DE PÁGINA (FOOTER) - LOGO ACCUSPORT PEQUEÑO Y CENTRADO
+# =====================================================================
+st.write("---") # Separador visual al final de los tabs
+# Columnas para centrar el logo pequeñito
+_, col_footer_center, _ = st.columns([2, 1, 2])
+with col_footer_center:
+    try:
+        # Mostramos el logo de Accusport muy pequeñito (width=60)
+        st.image(PATH_LOGO_ACCUSPORT, width=60)
+    except Exception:
+        st.markdown("<p style='text-align:center; font-size:10px; color:#555555;'>by ACCUSPORT</p>", unsafe_allow_html=True)
