@@ -13,11 +13,15 @@ CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4"
 # Configuración visual de la pestaña del navegador
 st.set_page_config(page_title="Focus by Accusport", page_icon="⚽", layout="centered")
 
-# Inicializar estados de sesión para el control de administradores
+# Inicializar estados de sesión para el flujo visual y administradores
 if "admin_autenticado" not in st.session_state:
     st.session_state["admin_autenticado"] = False
 if "nombre_admin" not in st.session_state:
     st.session_state["nombre_admin"] = ""
+if "ver_galeria" not in st.session_state:
+    st.session_state["ver_galeria"] = False
+if "info_jugador_activo" not in st.session_state:
+    st.session_state["info_jugador_activo"] = {}
 
 # Función para conectar con Google Sheets de forma segura usando la llave de los Secrets
 @st.cache_resource
@@ -49,11 +53,8 @@ def obtener_datos_pestana(nombre_pestana):
             worksheet = sheet.worksheet(nombre_pestana)
             datos = worksheet.get_all_records()
             df = pd.DataFrame(datos)
-            
-            # 🔥 BLINDAJE: Limpia espacios invisibles de los títulos del Excel automáticamente
             if not df.empty:
                 df.columns = df.columns.astype(str).str.strip()
-                
             return df
         except Exception as e:
             st.error(f"❌ Error al intentar leer la pestaña '{nombre_pestana}': {e}")
@@ -69,84 +70,123 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["👪 Ingreso Padres / Clientes", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DESPLEGABLE POR EQUIPO PARA LOS PADRES
+# SECCIÓN 1: INTERFAZ DE PADRES (CON GALERÍA VISUAL DE MINIATURAS)
 # =====================================================================
 with tab_padres:
-    st.write("### 🔍 Consulta tus partidos grabados")
-    st.write("Selecciona tu equipo y busca el nombre del jugador para acceder a la cartelera de videos.")
     
-    with st.spinner("Sincronizando cartelera deportiva..."):
-        df_usuarios = obtener_datos_pestana("USUARIOS")
-        df_partidos = obtener_datos_pestana("PARTIDOS")
+    # CASO INTERFAZ A: Modo Galería Activo (Ventana de Videos Estilo YouTube)
+    if st.session_state["ver_galeria"]:
+        info = st.session_state["info_jugador_activo"]
         
-    if not df_usuarios.empty:
-        # Validar que existan las columnas clave antes de operar
-        columnas_requeridas = ["Equipo", "Hijo_Jugador", "Documento", "Nombre_Papa"]
-        columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
+        # Botón elegante para regresar a la búsqueda
+        if st.button("⬅️ Volver a buscar otro jugador"):
+            st.session_state["ver_galeria"] = False
+            st.session_state["info_jugador_activo"] = {}
+            st.rerun()
+            
+        st.write(f"### 🎬 Galería de Videos: **{info['hijo']}**")
+        st.markdown(f"🏟️ **Equipo:** {info['equipo']} | 👨‍👦 **Acudiente:** {info['papa']}")
+        st.write("---")
         
-        if columnas_faltantes:
-            st.error(f"🚨 Error en los títulos de tu Google Sheet. Falta o está mal escrita la columna: **{columnas_faltantes[0]}**")
-            st.info("Revisa la fila 1 de tu pestaña 'USUARIOS' y asegúrate de escribir los títulos exactamente iguales.")
+        with st.spinner("Cargando tus partidos grabados..."):
+            df_partidos = obtener_datos_pestana("PARTIDOS")
+            
+        if not df_partidos.empty and "Documento_Papa" in df_partidos.columns:
+            df_partidos["Documento_Papa"] = df_partidos["Documento_Papa"].astype(str).str.strip()
+            partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == info["documento"]]
+            
+            if not partidos_filtrados.empty:
+                st.write("Selecciona cualquiera de tus partidos disponibles abajo para abrir el video:")
+                
+                # 🚀 Creación de la cuadrícula visual (Grid de 2 columnas para que parezcan tarjetas de video)
+                cols = st.columns(2)
+                
+                for idx, (index_fila, row) in enumerate(partidos_filtrados.iterrows()):
+                    rival = row.get('Rival/Partido', 'Rival Desconocido')
+                    fecha = row.get('Fecha', 'S/F')
+                    estatus = row.get('Estatus_Grabacion', 'Procesando')
+                    pago = row.get('Estado_Pago', 'Pendiente')
+                    link_drive = row.get('Link_Download_Drive', '')
+                    
+                    # Distribuimos los partidos equitativamente entre la columna izquierda y derecha
+                    with cols[idx % 2]:
+                        # Contenedor visual tipo tarjeta
+                        with st.container(border=True):
+                            # Miniatura por defecto de alta calidad (Cancha de fútbol/Cámara)
+                            st.image("https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=500&auto=format&fit=crop&q=60", 
+                                     caption=f"Focus Match Cam - {fecha}", use_container_width=True)
+                            
+                            st.markdown(f"#### 🆚 vs {rival}")
+                            st.markdown(f"📅 **Fecha:** {fecha}")
+                            
+                            # Indicadores de estatus estéticos
+                            if str(pago).lower() == "pagado":
+                                st.markdown("💰 **Pago:** 🟢 Confirmado")
+                            else:
+                                st.markdown("💰 **Pago:** 🟡 Pendiente / Por Verificar")
+                                
+                            if str(estatus).lower() == "listo":
+                                st.markdown("🎥 **Video:** 🟢 Disponible")
+                            else:
+                                st.markdown("🎥 **Video:** 🔵 En Procesamiento")
+                            
+                            st.write("")
+                            # Botón de acción directo para ver el video
+                            if link_drive and str(link_drive).startswith("http"):
+                                st.link_button("📺 VER REPRODUCCIÓN / DESCARGAR", link_drive, use_container_width=True)
+                            else:
+                                st.info("🕒 El enlace se activará automáticamente cuando el video termine de renderizarse.")
+            else:
+                st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
         else:
-            # Limpieza de textos en las celdas
+            st.error("❌ No se pudo conectar a la tabla de partidos o falta la columna 'Documento_Papa'.")
+
+    # CASO INTERFAZ B: Modo Filtros Activo (Ventana Inicial de Selección)
+    else:
+        st.write("### 🔍 Consulta tus partidos grabados")
+        st.write("Selecciona tu equipo y busca el nombre del jugador para acceder a la cartelera de videos.")
+        
+        with st.spinner("Sincronizando cartelera deportiva..."):
+            df_usuarios = obtener_datos_pestana("USUARIOS")
+            
+        if not df_usuarios.empty:
             df_usuarios["Equipo"] = df_usuarios["Equipo"].astype(str).str.strip()
             df_usuarios["Hijo_Jugador"] = df_usuarios["Hijo_Jugador"].astype(str).str.strip()
             
-            # 1. Filtro dinámico de Equipos
-            lista_equipos = sorted([eq for eq in df_usuarios["Equipo"].unique() if eq])
-            equipo_seleccionado = st.selectbox("1. Selecciona el Equipo de tu Hijo:", ["-- Selecciona un equipo --"] + lista_equipos)
+            # Validar columnas
+            columnas_requeridas = ["Equipo", "Hijo_Jugador", "Documento", "Nombre_Papa"]
+            columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
             
-            if equipo_seleccionado != "-- Selecciona un equipo --":
-                df_filtrado_equipo = df_usuarios[df_usuarios["Equipo"] == equipo_seleccionado]
-                lista_hijos = sorted([hj for hj in df_filtrado_equipo["Hijo_Jugador"].unique() if hj])
+            if columnas_faltantes:
+                st.error(f"🚨 Títulos incorrectos en Excel. Falta la columna: **{columnas_faltantes[0]}**")
+            else:
+                # 1. Selector de Equipos
+                lista_equipos = sorted([eq for eq in df_usuarios["Equipo"].unique() if eq])
+                equipo_seleccionado = st.selectbox("1. Selecciona el Equipo de tu Hijo:", ["-- Selecciona un equipo --"] + lista_equipos)
                 
-                # 2. Filtro dinámico de Alumnos
-                hijo_seleccionado = st.selectbox("2. Selecciona el Nombre del Jugador (Hijo):", ["-- Selecciona al jugador --"] + lista_hijos)
-                
-                if hijo_seleccionado != "-- Selecciona al jugador --":
-                    st.write("")
-                    if st.button("Buscar mis Grabaciones", key="btn_buscar_por_equipo"):
-                        
-                        usuario_info = df_filtrado_equipo[df_filtrado_equipo["Hijo_Jugador"] == hijo_seleccionado].iloc[0]
-                        documento_interno = str(usuario_info["Documento"]).strip()
-                        nombre_papa = usuario_info["Nombre_Papa"]
-                        
-                        st.success(f"¡Bienvenido(a) Familia de {hijo_seleccionado}!")
-                        st.markdown(f"👨‍👦 **Acudiente Registrado:** {nombre_papa} | 🏟️ **Equipo:** {equipo_seleccionado}")
-                        st.write("---")
-                        
-                        if not df_partidos.empty:
-                            # Asegurar limpieza también en la tabla de partidos
-                            if "Documento_Papa" in df_partidos.columns:
-                                df_partidos["Documento_Papa"] = df_partidos["Documento_Papa"].astype(str).str.strip()
-                                partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == documento_interno]
-                                
-                                if not partidos_filtrados.empty:
-                                    st.write("#### 🎥 Partidos y Enlaces Disponibles:")
-                                    
-                                    for idx, row in partidos_filtrados.iterrows():
-                                        rival = row.get('Rival/Partido', 'Desconocido')
-                                        fecha = row.get('Fecha', 'S/F')
-                                        estatus = row.get('Estatus_Grabacion', 'Procesando')
-                                        pago = row.get('Estado_Pago', 'Pendiente')
-                                        link_drive = row.get('Link_Download_Drive', '')
-                                        
-                                        with st.expander(f"📅 Partido vs {rival} ({fecha})"):
-                                            st.write(f"**Estatus de la Grabación:** {estatus}")
-                                            st.write(f"**Estado del Pago:** {pago}")
-                                            
-                                            if link_drive and str(link_drive).startswith("http"):
-                                                st.markdown(f"🎨 **[📥 CLIC AQUÍ PARA VER Y DESCARGAR EL VIDEO]({link_drive})**")
-                                            else:
-                                                st.info("🕒 Este video se está procesando o está pendiente de facturación. El enlace se activará automáticamente.")
-                                else:
-                                    st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
-                            else:
-                                st.error("🚨 Falta la columna 'Documento_Papa' en la pestaña PARTIDOS.")
-                        else:
-                            st.info("ℹ️ No hay partidos registrados en el sistema general actualmente.")
-    else:
-        st.error("❌ La pestaña 'USUARIOS' del Excel está completamente vacía. Agrega al menos una fila con datos de prueba.")
+                if equipo_seleccionado != "-- Selecciona un equipo --":
+                    df_filtrado_equipo = df_usuarios[df_usuarios["Equipo"] == equipo_seleccionado]
+                    lista_hijos = sorted([hj for hj in df_filtrado_equipo["Hijo_Jugador"].unique() if hj])
+                    
+                    # 2. Selector de Alumnos
+                    hijo_seleccionado = st.selectbox("2. Selecciona el Nombre del Jugador (Hijo):", ["-- Selecciona al jugador --"] + lista_hijos)
+                    
+                    if hijo_seleccionado != "-- Selecciona al jugador --":
+                        st.write("")
+                        if st.button("🚀 ENTRAR A MI GALERÍA DE VIDEOS", use_container_width=True):
+                            # Capturamos los datos del alumno y disparamos la ventana de galería
+                            usuario_info = df_filtrado_equipo[df_filtrado_equipo["Hijo_Jugador"] == hijo_seleccionado].iloc[0]
+                            
+                            st.session_state["info_jugador_activo"] = {
+                                "documento": str(usuario_info["Documento"]).strip(),
+                                "hijo": hijo_seleccionado,
+                                "equipo": equipo_seleccionado,
+                                "papa": usuario_info["Nombre_Papa"]
+                            }
+                            st.session_state["ver_galeria"] = True
+                            st.rerun()
+        else:
+            st.error("❌ La pestaña 'USUARIOS' está vacía. Añade datos en tu Google Sheet.")
 
 # =====================================================================
 # SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BÚNKER)
@@ -163,16 +203,15 @@ with tab_admin:
         if st.button("Autenticar Servidor", key="btn_admin_login"):
             if "admins" in st.secrets:
                 dict_admins = st.secrets["admins"]
-                
                 if usuario_admin in dict_admins and clave_admin == str(dict_admins[usuario_admin]):
                     st.session_state["admin_autenticado"] = True
                     st.session_state["nombre_admin"] = usuario_admin.capitalize()
                     st.success("🔒 Acceso concedido. Cargando consola...")
                     st.rerun()
                 else:
-                    st.error("❌ Credenciales inválidas. Inténtalo de nuevo o contacta al administrador del sistema.")
+                    st.error("❌ Credenciales inválidas.")
             else:
-                st.error("🚨 Error del Servidor: No se encontró la base de credenciales '[admins]' en los Secrets de Streamlit.")
+                st.error("🚨 Error: No se encontró la sección '[admins]' en los Secrets.")
                 
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state['nombre_admin']}**")
@@ -190,19 +229,14 @@ with tab_admin:
             ["Ver Tabla de Usuarios (Papás)", "Ver Tabla de Partidos (Grabaciones y Enlaces)"]
         )
         
-        with st.spinner("Sincronizando información con Google Drive..."):
+        with st.spinner("Sincronizando información..."):
             if opcion_tabla == "Ver Tabla de Usuarios (Papás)":
                 df_adm_u = obtener_datos_pestana("USUARIOS")
                 if not df_adm_u.empty:
-                    st.write(f"**Total de registros encontrados:** {len(df_adm_u)} papás.")
+                    st.write(f"**Total de registros:** {len(df_adm_u)} papás.")
                     st.dataframe(df_adm_u, use_container_width=True)
-                else:
-                    st.warning("⚠️ La pestaña 'USUARIOS' está vacía o sus columnas no coinciden con el formato.")
-                    
             elif opcion_tabla == "Ver Tabla de Partidos (Grabaciones y Enlaces)":
                 df_adm_p = obtener_datos_pestana("PARTIDOS")
                 if not df_adm_p.empty:
-                    st.write(f"**Total de registros encontrados:** {len(df_adm_p)} partidos/videos.")
+                    st.write(f"**Total de registros:** {len(df_adm_p)} partidos.")
                     st.dataframe(df_adm_p, use_container_width=True)
-                else:
-                    st.warning("⚠️ La pestaña 'PARTIDOS' está vacía o sus columnas no coinciden con el formato.")
