@@ -8,15 +8,83 @@ import re
 from datetime import datetime, timedelta
 
 # =====================================================================
-# 📝 CONFIGURACIÓN INICIAL - CENTRALIZADA Y SEGURA
+# 📝 CONFIGURACIÓN INICIAL Y CENTRAL DE BRANDING (TUS LOGOS REALES)
 # =====================================================================
 CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4" 
 
 # 🚀 ID MAESTRO DE TU GOOGLE CALENDAR FOCUS BY ACCUSPORT:
 FOCUS_CALENDAR_DEFAULT = "c_3df55a2bb225d2a2d2054496334a5d7c7f9afca3f9099aea782b278fd9f45472@group.calendar.google.com"
+
+# 🖼️ RUTAS EXACTAS DE LOS ARCHIVOS QUE ACABAS DE SUBIR:
+PATH_LOGO_FOCUS = "IMG-20260521-WA0004.jpg" 
+PATH_LOGO_ACCUSPORT = "logonew.png"
 # =====================================================================
 
 st.set_page_config(page_title="Focus by Accusport", page_icon="⚽", layout="centered")
+
+# 🎨 INYECCIÓN MAESTRA DE DISEÑO: BLACK & ORANGE CYBER-TECH
+st.markdown("""
+    <style>
+    /* Fondo global negro absoluto */
+    .stApp {
+        background-color: #000000 !important;
+        color: #f8fafc !important;
+    }
+    
+    /* Personalización estética de tarjetas y contenedores */
+    div[data-testid="stContainer"] {
+        background-color: #0d0d0d !important;
+        border: 1px solid #ff5500 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 20px rgba(255, 85, 0, 0.15) !important;
+        padding: 25px !important;
+        margin-bottom: 20px !important;
+    }
+    
+    /* Botones Premium Naranja Tech */
+    button[data-testid="stBaseButton-secondary"], button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(135deg, #ff5500 0%, #cc4400 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        letter-spacing: 1px !important;
+        text-transform: uppercase !important;
+        box-shadow: 0 0 10px rgba(255, 85, 0, 0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    button:hover {
+        background: linear-gradient(135deg, #ff7722 0%, #ff5500 100%) !important;
+        box-shadow: 0 0 20px rgba(255, 85, 0, 0.6) !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    /* Pestañas (Tabs) Estilo Cyberpunk */
+    button[data-baseweb="tab"] {
+        color: #888888 !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+    }
+    button[aria-selected="true"] {
+        color: #ff5500 !important;
+        border-bottom-color: #ff5500 !important;
+    }
+    
+    /* Ajuste de inputs y selectores oscuros */
+    div[data-baseweb="select"], input {
+        background-color: #0d0d0d !important;
+        color: white !important;
+        border: 1px solid #333333 !important;
+    }
+    
+    /* Alertas info estilizadas en modo oscuro */
+    .stAlert {
+        background-color: #0d0d0d !important;
+        color: #cbd5e1 !important;
+        border-left: 5px solid #ff5500 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Inicialización segura de estados de sesión
 if "admin_autenticado" not in st.session_state:
@@ -99,9 +167,24 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
             return False
     return False
 
-# --- DISEÑO DEL PORTAL WEB ---
-st.title("⚽ Focus by Accusport")
-st.subheader("Plataforma Premium de Contenido Deportivo")
+# =====================================================================
+# 📐 CABECERA DE MARCA - COLUMNAS DE LOGOS CON RUTA REAL
+# =====================================================================
+col_brand_left, col_brand_right = st.columns([2.5, 1.5])
+
+with col_brand_left:
+    try:
+        st.image(PATH_LOGO_FOCUS, width=280)
+    except Exception:
+        st.markdown("<h1 style='margin:0; font-size:45px; letter-spacing:-1px; color:#ffffff;'>⚡ FO<span style='color:#ff5500;'>CUS</span></h1>", unsafe_allow_html=True)
+
+with col_brand_right:
+    try:
+        st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
+        st.image(PATH_LOGO_ACCUSPORT, width=160)
+    except Exception:
+        st.markdown("<p style='text-align:right; margin-top:35px; font-size:12px; color:#888888; font-weight:700; letter-spacing:1px;'>by ACCUSPORT</p>", unsafe_allow_html=True)
+
 st.write("---")
 
 tab_padres, tab_admin = st.tabs(["📺 Focus Play (Familias)", "🔒 Control Administrativo"])
@@ -169,16 +252,16 @@ with tab_padres:
                     
                     with st.container(border=True):
                         if "bienvenidos a focus" in rival.lower():
-                            st.markdown(f"✨ **BIENVENIDA OFICIAL A TU GALERÍA**")
+                            st.markdown(f"✨ <span style='color:#ff5500; font-weight:700;'>BIENVENIDA OFICIAL A TU GALERÍA</span>", unsafe_allow_html=True)
                             st.markdown(f"## {rival}")
                         elif es_fecha_futura:
-                            st.markdown(f"🎥 **COBERTURA EN VIVO PROGRAMADA**")
+                            st.markdown(f"🎥 <span style='color:#ff5500; font-weight:700;'>COBERTURA EN VIVO PROGRAMADA</span>", unsafe_allow_html=True)
                             st.markdown(f"## 🆚 {texto_rival_limpio}")
                         elif estatus == "listo":
-                            st.markdown(f"✅ **TRANSMISIÓN DISPONIBLE EN ALTA DEFINICIÓN**")
+                            st.markdown(f"✅ <span style='color:#00ff66; font-weight:700;'>TRANSMISIÓN DISPONIBLE EN ALTA DEFINICIÓN</span>", unsafe_allow_html=True)
                             st.markdown(f"## 🆚 {texto_rival_limpio}")
                         else:
-                            st.markdown(f"⏳ **VIDEO EN PROCESO DE EDICIÓN MULTIMEDIA**")
+                            st.markdown(f"⏳ <span style='color:#ffaa00; font-weight:700;'>VIDEO EN PROCESO DE EDICIÓN MULTIMEDIA</span>", unsafe_allow_html=True)
                             st.markdown(f"## 🆚 {texto_rival_limpio}")
                             
                         st.markdown(f"📅 **Fecha del Encuentro:** {fecha_str}")
@@ -201,7 +284,6 @@ with tab_padres:
                                 
                                 if video_id:
                                     embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
-                                    # 🚀 CORREGIDO: Se removió 'scrolling=False' para limpiar el TypeError
                                     try:
                                         st.iframe(embed_url, height=450)
                                     except AttributeError:
@@ -265,7 +347,7 @@ with tab_admin:
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
         
-        with st.expander("🔗 SINCRONIZAR AGENDA CON GOOGLE CALENDAR (CELULAR)", expanded=False):
+        with st.expander("🔗 SINCRONIZAR AGENDA WITH GOOGLE CALENDAR (CELULAR)", expanded=False):
             st.write("Vincula el calendario corporativo de Focus directamente a las pantallas de tus dispositivos.")
             if FOCUS_CALENDAR_DEFAULT:
                 url_sincro_fijo = f"https://calendar.google.com/calendar/render?cid={FOCUS_CALENDAR_DEFAULT}"
