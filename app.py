@@ -4,6 +4,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import pandas as pd
 import json
+import re
 from datetime import datetime, timedelta
 
 # =====================================================================
@@ -126,31 +127,17 @@ with tab_padres:
             partidos_filtrados = df_partidos[df_partidos["Equipo"] == equipo].copy()
             
             if not partidos_filtrados.empty:
-                # Procesamiento robusto de fechas
                 partidos_filtrados['Fecha_Datetime'] = pd.to_datetime(partidos_filtrados['Fecha'], errors='coerce', dayfirst=True)
                 partidos_filtrados = partidos_filtrados.sort_values(by='Fecha_Datetime', ascending=False)
                 
                 for idx, row in partidos_filtrados.iterrows():
-                    # 🚀 SCANNER INTELIGENTE DE COLUMNAS (Mapea los datos sin importar errores de nombres en el Excel)
-                    rival = "Rival Desconocido"
-                    fecha_str = "S/F"
-                    estatus = "procesando"
-                    link_drive = ""
-
-                    for col in row.index:
-                        col_lower = str(col).lower()
-                        if "rival" in col_lower or "partido" in col_lower:
-                            rival = str(row[col]).strip()
-                        elif "fecha" in col_lower:
-                            fecha_str = str(row[col]).strip()
-                        elif "estatus" in col_lower or "estado" in col_lower or "grabacion" in col_lower:
-                            estatus = str(row[col]).strip().lower()
-                        elif "link" in col_lower or "drive" in col_lower or "download" in col_lower or "enlace" in col_lower:
-                            link_drive = str(row[col]).strip()
-
+                    rival = row.get('Rival/Partido', 'Rival Desconocido')
+                    fecha_str = row.get('Fecha', 'S/F')
+                    estatus = str(row.get('Estatus_Grabacion', 'Procesando')).lower()
+                    link_drive = str(row.get('Link_Download_Drive', '')).strip()
+                    
                     es_fecha_futura = pd.notnull(row['Fecha_Datetime']) and row['Fecha_Datetime'].date() > datetime.now().date()
                     
-                    # Filtro anti-redundancia de nombres
                     texto_rival_limpio = rival.strip()
                     if texto_rival_limpio.lower().startswith("vs "):
                         texto_rival_limpio = texto_rival_limpio[3:].strip()
@@ -180,22 +167,29 @@ with tab_padres:
                             st.info("🎯 Nuestro equipo técnico ya tiene agendado este partido. Las cámaras de Accusport estarán listas en la cancha.")
                         elif estatus == "listo":
                             if link_drive and "drive.google.com" in link_drive:
+                                # 🚀 EXTRACCIÓN CON LÁSER REGEX (Evita por completo errores de formato de URL)
                                 video_id = None
-                                try:
-                                    if "/file/d/" in link_drive:
-                                        video_id = link_drive.split("/file/d/")[1].split("/")[0]
-                                    elif "id=" in link_drive:
-                                        video_id = link_drive.split("id=")[1].split("&")[0]
+                                file_match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link_drive)
+                                id_match = re.search(r'id=([a-zA-Z0-9_-]+)', link_drive)
+                                
+                                if file_match:
+                                    video_id = file_match.group(1)
+                                elif id_match:
+                                    video_id = id_match.group(1)
+                                
+                                if video_id:
+                                    embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
                                     
-                                    if video_id:
-                                        embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
+                                    # 🛡️ ESCUDO DOBLE DE REPRODUCCIÓN (Fuerza el embed tipo Netflix)
+                                    try:
                                         st.iframe(embed_url, height=450, scrolling=False)
-                                        st.write("")
-                                        st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, width='stretch')
-                                    else:
-                                        st.link_button("📺 ABRIR CARPETA DE VIDEOS EN DRIVE", link_drive, width='stretch')
-                                except Exception:
-                                    st.link_button("📺 VER REPRODUCCIÓN EXTERNA", link_drive, width='stretch')
+                                    except AttributeError:
+                                        st.components.v1.iframe(embed_url, height=450, scrolling=False)
+                                        
+                                    st.write("")
+                                    st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, width='stretch')
+                                else:
+                                    st.link_button("📺 ABRIR CARPETA DE VIDEOS EN DRIVE", link_drive, width='stretch')
                             elif link_drive:
                                 st.link_button("📺 VER TRANSMISIÓN EN VIVO", link_drive, width='stretch')
                             else:
@@ -277,7 +271,7 @@ with tab_admin:
         )
         st.write("---")
         
-        # TABLERO DE CONTROL FINANCIERO SCANEADO
+        # TABLERO DE CONTROL FINANCIERO
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
@@ -300,7 +294,7 @@ with tab_admin:
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
             col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP")
             
-        # 🚀 1. AÑADIR EQUIPO (TEXTO ACTUALIZADO COMO PEDISTE)
+        # 1. AÑADIR EQUIPO (GLOBAL)
         elif opcion_admin == "🛡️ 1. Añadir Equipo (GLOBAL)":
             st.write("#### 🛡️ Registrar y Activar un Nuevo Equipo en Focus")
             nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
