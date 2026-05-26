@@ -3,6 +3,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import json
+import streamlit.components.v1 as components
 
 # =====================================================================
 # 📝 CONFIGURACIÓN INICIAL - CON EL ID DE TU GOOGLE SHEET APLICADO
@@ -70,15 +71,13 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["👪 Ingreso Padres / Clientes", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DE PADRES (GALERÍA PREMIUM LIMPIA)
+# SECCIÓN 1: INTERFAZ DE PADRES (CON REPRODUCTOR DE VIDEO INTEGRADO)
 # =====================================================================
 with tab_padres:
     
-    # CASO INTERFAZ A: Modo Galería Activo (Filtros ocultos, solo tarjetas de video)
     if st.session_state["ver_galeria"]:
         info = st.session_state["info_jugador_activo"]
         
-        # Botón elegante para regresar a la búsqueda
         if st.button("⬅️ Volver a la lista de equipos"):
             st.session_state["ver_galeria"] = False
             st.session_state["info_jugador_activo"] = {}
@@ -96,45 +95,45 @@ with tab_padres:
             partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == info["documento"]]
             
             if not partidos_filtrados.empty:
-                st.write("Selecciona el partido que deseas reproducir:")
+                st.write("Disfruta de tus partidos directamente aquí abajo:")
                 
-                # Grid de 2 columnas para distribución de tarjetas estilo catálogo
-                cols = st.columns(2)
-                
-                for idx, (index_fila, row) in enumerate(partidos_filtrados.iterrows()):
+                # Renderizamos los partidos uno abajo del otro en formato de pantalla grande cinematográfica
+                for index_fila, row in partidos_filtrados.iterrows():
                     rival = row.get('Rival/Partido', 'Rival Desconocido')
                     fecha = row.get('Fecha', 'S/F')
                     estatus = row.get('Estatus_Grabacion', 'Procesando')
-                    link_drive = row.get('Link_Download_Drive', '')
+                    link_drive = str(row.get('Link_Download_Drive', '')).strip()
                     
-                    with cols[idx % 2]:
-                        # Contenedor estético de la tarjeta
-                        with st.container(border=True):
-                            # Encabezado digital nativo (Adiós imágenes rotas externas)
-                            st.markdown("🌐 **FOCUS MATCH CAM**")
-                            st.write("---")
-                            
-                            st.markdown(f"### 🆚 {rival}")
-                            st.markdown(f"📅 **Fecha del Encuentro:** {fecha}")
-                            
-                            # Filtro visual: Solo mostramos la disponibilidad de la filmación
-                            if str(estatus).lower() == "listo":
-                                st.markdown("🎥 **Video:** 🟢 Disponible Ahora")
-                            else:
-                                st.markdown("🎥 **Video:** ⏳ En Procesamiento Técnico")
-                            
-                            st.write("")
-                            # Botón de acción directo
-                            if link_drive and str(link_drive).startswith("http"):
-                                st.link_button("📺 VER REPRODUCCIÓN / DESCARGAR", link_drive, use_container_width=True)
-                            else:
-                                st.info("🕒 El enlace se activará automáticamente cuando el video termine de subirse.")
+                    with st.container(border=True):
+                        st.markdown(f"### 🆚 Partido contra {rival}")
+                        st.markdown(f"📅 **Fecha:** {fecha} | 🎥 **Estatus:** 🟢 Disponible en Alta Definición")
+                        
+                        if link_drive and "drive.google.com" in link_drive:
+                            # 🚀 REPRODUCTOR PRO: Extraemos el ID del video para incrustar el reproductor nativo
+                            video_id = None
+                            try:
+                                if "/file/d/" in link_drive:
+                                    video_id = link_drive.split("/file/d/")[1].split("/")[0]
+                                elif "id=" in link_drive:
+                                    video_id = link_drive.split("id=")[1].split("&")[0]
+                                    
+                                if video_id:
+                                    # Generamos el enlace de incrustación profesional
+                                    embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
+                                    # Incrustamos el reproductor de video directamente en la pantalla
+                                    components.iframe(embed_url, height=450, scrolling=False)
+                                else:
+                                    st.warning("⚠️ El enlace de Drive no tiene un formato válido.")
+                                    st.link_button("🔗 Abrir enlace externo alternativo", link_drive, use_container_width=True)
+                            except Exception as e:
+                                st.link_button("📺 VER VIDEO (Enlace Externo)", link_drive, use_container_width=True)
+                        else:
+                            st.info("🕒 Este video se está procesando técnicamente. El reproductor aparecerá aquí automáticamente.")
             else:
                 st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
         else:
             st.error("❌ No se pudo conectar a la tabla de partidos o falta la columna 'Documento_Papa'.")
 
-    # CASO INTERFAZ B: Modo Filtros Activo (Ventana Inicial de Selección)
     else:
         st.write("### 🔍 Consulta tus partidos grabados")
         st.write("Selecciona tu equipo y busca el nombre del jugador para acceder a la cartelera de videos.")
@@ -152,7 +151,6 @@ with tab_padres:
             if columnas_faltantes:
                 st.error(f"🚨 Títulos incorrectos en Excel. Falta la columna: **{columnas_faltantes[0]}**")
             else:
-                # 1. Selector de Equipos
                 lista_equipos = sorted([eq for eq in df_usuarios["Equipo"].unique() if eq])
                 equipo_seleccionado = st.selectbox("1. Selecciona el Equipo de tu Hijo:", ["-- Selecciona un equipo --"] + lista_equipos)
                 
@@ -160,7 +158,6 @@ with tab_padres:
                     df_filtrado_equipo = df_usuarios[df_usuarios["Equipo"] == equipo_seleccionado]
                     lista_hijos = sorted([hj for hj in df_filtrado_equipo["Hijo_Jugador"].unique() if hj])
                     
-                    # 2. Selector de Alumnos
                     hijo_seleccionado = st.selectbox("2. Selecciona el Nombre del Jugador (Hijo):", ["-- Selecciona al jugador --"] + lista_hijos)
                     
                     if hijo_seleccionado != "-- Selecciona al jugador --":
