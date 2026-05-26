@@ -71,7 +71,7 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["👪 Galería para Padres", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DE PADRES (BÚSQUEDA DIRECTA POR EQUIPO)
+# SECCIÓN 1: INTERFAZ DE PADRES (REPRODUCTOR + BOTÓN DE DESCARGA DIRECTA)
 # =====================================================================
 with tab_padres:
     
@@ -85,7 +85,7 @@ with tab_padres:
             st.rerun()
             
         st.write(f"### 🎬 Cartelera de Videos: **{equipo}**")
-        st.write("Disfruta de las grabaciones y resúmenes directamente aquí abajo:")
+        st.write("Disfruta de las grabaciones y descárgalas directamente abajo:")
         st.write("---")
         
         with st.spinner("Cargando partidos de la categoría..."):
@@ -93,7 +93,6 @@ with tab_padres:
             
         if not df_partidos.empty and "Equipo" in df_partidos.columns:
             df_partidos["Equipo"] = df_partidos["Equipo"].astype(str).str.strip()
-            # Filtramos todos los partidos que pertenezcan a este equipo
             partidos_filtrados = df_partidos[df_partidos["Equipo"] == equipo]
             
             if not partidos_filtrados.empty:
@@ -119,8 +118,13 @@ with tab_padres:
                                         video_id = link_drive.split("id=")[1].split("&")[0]
                                         
                                     if video_id:
+                                        # 1. Ponemos el reproductor de cine premium
                                         embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
                                         components.iframe(embed_url, height=450, scrolling=False)
+                                        
+                                        # 2. 🚀 NUEVO: Botón destacado para descargar el video original de inmediato
+                                        st.write("")
+                                        st.link_button("📥 DESCARGAR ESTE PARTIDO EN ALTA DEFINICIÓN", link_drive, use_container_width=True)
                                     else:
                                         st.warning("⚠️ El enlace de Drive no tiene un formato válido de archivo.")
                                         st.link_button("🔗 Abrir enlace alternativo", link_drive, use_container_width=True)
@@ -130,7 +134,7 @@ with tab_padres:
                                 st.warning("⚠️ Falta el enlace del video en la base de datos.")
                         else:
                             st.markdown("🎥 **Estatus:** ⏳ En Procesamiento Técnico")
-                            st.info("🕒 Este video se está procesando por nuestro equipo técnico. El reproductor aparecerá aquí automáticamente.")
+                            st.info("🕒 Este video se está procesando por nuestro equipo técnico. El reproductor y la descarga se activarán automáticamente.")
             else:
                 st.info(f"ℹ️ No se encontraron grabaciones cargadas para el equipo {equipo} por el momento.")
         else:
@@ -147,7 +151,6 @@ with tab_padres:
         if not df_partidos_init.empty and "Equipo" in df_partidos_init.columns:
             df_partidos_init["Equipo"] = df_partidos_init["Equipo"].astype(str).str.strip()
             
-            # Sacamos la lista de equipos que ya tienen partidos registrados
             lista_equipos = sorted([eq for eq in df_partidos_init["Equipo"].unique() if eq])
             
             equipo_seleccionado = st.selectbox("Selecciona tu Equipo / Categoría:", ["-- Selecciona un equipo --"] + lista_equipos)
