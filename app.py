@@ -48,7 +48,13 @@ def obtener_datos_pestana(nombre_pestana):
             sheet = client.open_by_key(CONFIG_SHEET_ID)
             worksheet = sheet.worksheet(nombre_pestana)
             datos = worksheet.get_all_records()
-            return pd.DataFrame(datos)
+            df = pd.DataFrame(datos)
+            
+            # 🔥 BLINDAJE: Limpia espacios invisibles de los títulos del Excel automáticamente
+            if not df.empty:
+                df.columns = df.columns.astype(str).str.strip()
+                
+            return df
         except Exception as e:
             st.error(f"❌ Error al intentar leer la pestaña '{nombre_pestana}': {e}")
             return pd.DataFrame()
@@ -63,71 +69,84 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["👪 Ingreso Padres / Clientes", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: NUEVA INTERFAZ DESPLEGABLE POR EQUIPO PARA LOS PADRES
+# SECCIÓN 1: INTERFAZ DESPLEGABLE POR EQUIPO PARA LOS PADRES
 # =====================================================================
 with tab_padres:
     st.write("### 🔍 Consulta tus partidos grabados")
     st.write("Selecciona tu equipo y busca el nombre del jugador para acceder a la cartelera de videos.")
     
-    # Descarga previa de datos para alimentar los selectores dinámicos
     with st.spinner("Sincronizando cartelera deportiva..."):
         df_usuarios = obtener_datos_pestana("USUARIOS")
         df_partidos = obtener_datos_pestana("PARTIDOS")
         
     if not df_usuarios.empty:
-        # Limpieza de textos y eliminación de espacios fantasmas
-        df_usuarios["Equipo"] = df_usuarios["Equipo"].astype(str).str.strip()
-        df_usuarios["Hijo_Jugador"] = df_usuarios["Hijo_Jugador"].astype(str).str.strip()
+        # Validar que existan las columnas clave antes de operar
+        columnas_requeridas = ["Equipo", "Hijo_Jugador", "Documento", "Nombre_Papa"]
+        columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
         
-        # 1. Filtro dinámico de Equipos (alfabético y sin duplicados)
-        lista_equipos = sorted([eq for eq in df_usuarios["Equipo"].unique() if eq])
-        equipo_seleccionado = st.selectbox("1. Selecciona el Equipo de tu Hijo:", ["-- Selecciona un equipo --"] + lista_equipos)
-        
-        if equipo_seleccionado != "-- Selecciona un equipo --":
-            # Filtrar los alumnos que pertenecen únicamente al equipo seleccionado
-            df_filtrado_equipo = df_usuarios[df_usuarios["Equipo"] == equipo_seleccionado]
-            lista_hijos = sorted([hj for hj in df_filtrado_equipo["Hijo_Jugador"].unique() if hj])
+        if columnas_faltantes:
+            st.error(f"🚨 Error en los títulos de tu Google Sheet. Falta o está mal escrita la columna: **{columnas_faltantes[0]}**")
+            st.info("Revisa la fila 1 de tu pestaña 'USUARIOS' y asegúrate de escribir los títulos exactamente iguales.")
+        else:
+            # Limpieza de textos en las celdas
+            df_usuarios["Equipo"] = df_usuarios["Equipo"].astype(str).str.strip()
+            df_usuarios["Hijo_Jugador"] = df_usuarios["Hijo_Jugador"].astype(str).str.strip()
             
-            # 2. Filtro dinámico de Alumnos correspondientes a ese equipo
-            hijo_seleccionado = st.selectbox("2. Selecciona el Nombre del Jugador (Hijo):", ["-- Selecciona al jugador --"] + lista_hijos)
+            # 1. Filtro dinámico de Equipos
+            lista_equipos = sorted([eq for eq in df_usuarios["Equipo"].unique() if eq])
+            equipo_seleccionado = st.selectbox("1. Selecciona el Equipo de tu Hijo:", ["-- Selecciona un equipo --"] + lista_equipos)
             
-            if hijo_seleccionado != "-- Selecciona al jugador --":
-                st.write("")
-                if st.button("Buscar mis Grabaciones", key="btn_buscar_por_equipo"):
-                    
-                    # Buscamos la información del alumno seleccionado de forma interna
-                    usuario_info = df_filtrado_equipo[df_filtrado_equipo["Hijo_Jugador"] == hijo_seleccionado].iloc[0]
-                    documento_interno = str(usuario_info["Documento"]).strip()
-                    nombre_papa = usuario_info["Nombre_Papa"]
-                    
-                    st.success(f"¡Bienvenido(a) Familia de {hijo_seleccionado}!")
-                    st.markdown(f"👨‍👦 **Acudiente Registrado:** {nombre_papa} | 🏟️ **Equipo:** {equipo_seleccionado}")
-                    st.write("---")
-                    
-                    # Cruzamos el documento del alumno seleccionado con la tabla de grabaciones
-                    if not df_partidos.empty:
-                        df_partidos["Documento_Papa"] = df_partidos["Documento_Papa"].astype(str).str.strip()
-                        partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == documento_interno]
+            if equipo_seleccionado != "-- Selecciona un equipo --":
+                df_filtrado_equipo = df_usuarios[df_usuarios["Equipo"] == equipo_seleccionado]
+                lista_hijos = sorted([hj for hj in df_filtrado_equipo["Hijo_Jugador"].unique() if hj])
+                
+                # 2. Filtro dinámico de Alumnos
+                hijo_seleccionado = st.selectbox("2. Selecciona el Nombre del Jugador (Hijo):", ["-- Selecciona al jugador --"] + lista_hijos)
+                
+                if hijo_seleccionado != "-- Selecciona al jugador --":
+                    st.write("")
+                    if st.button("Buscar mis Grabaciones", key="btn_buscar_por_equipo"):
                         
-                        if not partidos_filtrados.empty:
-                            st.write("#### 🎥 Partidos y Enlaces Disponibles:")
-                            
-                            for idx, row in partidos_filtrados.iterrows():
-                                with st.expander(f"📅 Partido vs {row['Rival/Partido']} ({row['Fecha']})"):
-                                    st.write(f"**Estatus de la Grabación:** {row['Estatus_Grabacion']}")
-                                    st.write(f"**Estado del Pago:** {row['Estado_Pago']}")
+                        usuario_info = df_filtrado_equipo[df_filtrado_equipo["Hijo_Jugador"] == hijo_seleccionado].iloc[0]
+                        documento_interno = str(usuario_info["Documento"]).strip()
+                        nombre_papa = usuario_info["Nombre_Papa"]
+                        
+                        st.success(f"¡Bienvenido(a) Familia de {hijo_seleccionado}!")
+                        st.markdown(f"👨‍👦 **Acudiente Registrado:** {nombre_papa} | 🏟️ **Equipo:** {equipo_seleccionado}")
+                        st.write("---")
+                        
+                        if not df_partidos.empty:
+                            # Asegurar limpieza también en la tabla de partidos
+                            if "Documento_Papa" in df_partidos.columns:
+                                df_partidos["Documento_Papa"] = df_partidos["Documento_Papa"].astype(str).str.strip()
+                                partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == documento_interno]
+                                
+                                if not partidos_filtrados.empty:
+                                    st.write("#### 🎥 Partidos y Enlaces Disponibles:")
                                     
-                                    link_drive = row['Link_Download_Drive']
-                                    if link_drive and str(link_drive).startswith("http"):
-                                        st.markdown(f"🎨 **[📥 CLIC AQUÍ PARA VER Y DESCARGAR EL VIDEO]({link_drive})**")
-                                    else:
-                                        st.info("🕒 Este video se está procesando o está pendiente de facturación. El enlace se activará automáticamente.")
+                                    for idx, row in partidos_filtrados.iterrows():
+                                        rival = row.get('Rival/Partido', 'Desconocido')
+                                        fecha = row.get('Fecha', 'S/F')
+                                        estatus = row.get('Estatus_Grabacion', 'Procesando')
+                                        pago = row.get('Estado_Pago', 'Pendiente')
+                                        link_drive = row.get('Link_Download_Drive', '')
+                                        
+                                        with st.expander(f"📅 Partido vs {rival} ({fecha})"):
+                                            st.write(f"**Estatus de la Grabación:** {estatus}")
+                                            st.write(f"**Estado del Pago:** {pago}")
+                                            
+                                            if link_drive and str(link_drive).startswith("http"):
+                                                st.markdown(f"🎨 **[📥 CLIC AQUÍ PARA VER Y DESCARGAR EL VIDEO]({link_drive})**")
+                                            else:
+                                                st.info("🕒 Este video se está procesando o está pendiente de facturación. El enlace se activará automáticamente.")
+                                else:
+                                    st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
+                            else:
+                                st.error("🚨 Falta la columna 'Documento_Papa' en la pestaña PARTIDOS.")
                         else:
-                            st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
-                    else:
-                        st.info("ℹ️ No hay partidos registrados en el sistema general actualmente.")
+                            st.info("ℹ️ No hay partidos registrados en el sistema general actualmente.")
     else:
-        st.error("❌ Error de comunicación: No se encontraron datos dentro de la pestaña 'USUARIOS' del Excel.")
+        st.error("❌ La pestaña 'USUARIOS' del Excel está completamente vacía. Agrega al menos una fila con datos de prueba.")
 
 # =====================================================================
 # SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BÚNKER)
