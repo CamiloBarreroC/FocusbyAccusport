@@ -131,7 +131,7 @@ with tab_padres:
                 partidos_filtrados = partidos_filtrados.sort_values(by='Fecha_Datetime', ascending=False)
                 
                 for idx, row in partidos_filtrados.iterrows():
-                    # 🚀 DETECTOR UNIVERSAL DE DATOS (Foolproof Scan)
+                    # DETECTOR UNIVERSAL DE DATOS
                     rival = "Rival Desconocido"
                     fecha_str = "S/F"
                     estatus = "procesando"
@@ -141,24 +141,17 @@ with tab_padres:
                         col_lower = str(col).lower()
                         col_val_str = str(row[col]).strip()
 
-                        # 1. Detectar Rival/Título
                         if "rival" in col_lower or "partido" in col_lower:
                             rival = col_val_str
-                        
-                        # 2. Detectar Fecha
                         elif "fecha" in col_lower:
                             fecha_str = col_val_str
-
-                        # 3. Detectar Estatus
                         elif "estatus" in col_lower or "estado" in col_lower or "grabacion" in col_lower:
                             estatus = col_val_str.lower()
 
-                        # 4. Detector de Enlaces (Smart & Brute Force Fallback)
                         if "link" in col_lower or "drive" in col_lower or "download" in col_lower or "enlace" in col_lower or "url" in col_lower:
                             if col_val_str.lower().startswith("http"):
                                 link_drive = col_val_str
                     
-                    # 🔥 FALLBACK DE FUERZA BRUTA: Si el scaner falló, busca cualquier celda que sea una URL
                     if not link_drive:
                         for val in row.values:
                             val_str = str(val).strip()
@@ -197,7 +190,6 @@ with tab_padres:
                             st.info("🎯 Nuestro equipo técnico ya tiene agendado este partido. Las cámaras de Accusport estarán listas en la cancha.")
                         elif estatus == "listo":
                             if link_drive and "drive.google.com" in link_drive:
-                                # Extracción láser Regex
                                 video_id = None
                                 file_match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link_drive)
                                 id_match = re.search(r'id=([a-zA-Z0-9_-]+)', link_drive)
@@ -209,9 +201,9 @@ with tab_padres:
                                 
                                 if video_id:
                                     embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
-                                    # Forzar reproducción nativa
+                                    # 🚀 CORREGIDO: Se removió 'scrolling=False' para limpiar el TypeError
                                     try:
-                                        st.iframe(embed_url, height=450, scrolling=False)
+                                        st.iframe(embed_url, height=450)
                                     except AttributeError:
                                         st.components.v1.iframe(embed_url, height=450, scrolling=False)
                                     st.write("")
@@ -299,7 +291,7 @@ with tab_admin:
         )
         st.write("---")
         
-        # TABLERO DE CONTROL FINANCIERO (Scanner de dinero)
+        # TABLERO DE CONTROL FINANCIERO
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
