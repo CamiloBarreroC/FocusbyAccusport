@@ -330,4 +330,16 @@ with tab_admin:
             
             if st.button("💾 Guardar Registro Mensual", use_container_width=True):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
-                if
+                if exito:
+                    st.success(f"💳 Mensualidad de {mes_m} para {equipo_m} anotada con éxito.")
+                    st.balloons()
+
+        # AUDITAR HOJAS
+        elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
+            tabla_sel = st.radio("Elige la base de datos a auditar:", ["USUARIOS", "PARTIDOS", "PAGOS_MENSUALES"])
+            df_audit = obtener_datos_pestana(tabla_sel)
+            if not df_audit.empty:
+                st.write(f"**Mostrando {len(df_audit)} filas de la pestaña {tabla_sel}:**")
+                st.dataframe(df_audit, use_container_width=True)
+            else:
+                st.warning(f"⚠️ La pestaña '{tabla_sel}' está vacía o no tiene registros aún.")
