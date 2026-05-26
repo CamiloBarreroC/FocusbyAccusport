@@ -140,14 +140,17 @@ with tab_padres:
                     with st.container(border=True):
                         if "bienvenidos a focus" in rival.lower():
                             st.markdown(f"✨ **BIENVENIDA OFICIAL A TU GALERÍA**")
+                            st.markdown(f"## {rival}")
                         elif es_fecha_futura:
                             st.markdown(f"🎥 **COBERTURA EN VIVO PROGRAMADA**")
+                            st.markdown(f"## 🆚 {rival}")
                         elif estatus == "listo":
                             st.markdown(f"✅ **TRANSMISIÓN DISPONIBLE EN ALTA DEFINICIÓN**")
+                            st.markdown(f"## 🆚 {rival}")
                         else:
                             st.markdown(f"⏳ **VIDEO EN PROCESO DE EDICIÓN MULTIMEDIA**")
+                            st.markdown(f"## 🆚 {rival}")
                             
-                        st.markdown(f"## {rival if 'bienvenidos' in rival.lower() else '🆚 ' + rival}")
                         st.markdown(f"📅 **Fecha del Encuentro:** {fecha_str}")
                         st.write("---")
                         
@@ -156,6 +159,7 @@ with tab_padres:
                         elif es_fecha_futura:
                             st.info("🎯 Nuestro equipo técnico ya tiene agendado este partido. Las cámaras de Accusport estarán listas en la cancha.")
                         elif estatus == "listo":
+                            # 🚀 REPRODUCTOR INTELIGENTE OPTIMIZADO CONTRA ERRORES
                             if link_drive and "drive.google.com" in link_drive:
                                 video_id = None
                                 try:
@@ -163,13 +167,22 @@ with tab_padres:
                                         video_id = link_drive.split("/file/d/")[1].split("/")[0]
                                     elif "id=" in link_drive:
                                         video_id = link_drive.split("id=")[1].split("&")[0]
+                                    
                                     if video_id:
                                         embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
                                         st.iframe(embed_url, height=450, scrolling=False)
                                         st.write("")
                                         st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, width='stretch')
+                                    else:
+                                        # Si es un link de Drive pero no un archivo directo (ej: una carpeta)
+                                        st.link_button("📺 ABRIR CARPETA DE VIDEOS EN DRIVE", link_drive, width='stretch')
                                 except Exception:
-                                    st.link_button("📺 VER REPRODUCCIÓN", link_drive, width='stretch')
+                                    st.link_button("📺 VER REPRODUCCIÓN EXTERNA", link_drive, width='stretch')
+                            elif link_drive:
+                                # Si es cualquier otro enlace válido (Youtube, Vimeo, etc.)
+                                st.link_button("📺 VER TRANSMISIÓN EN VIVO", link_drive, width='stretch')
+                            else:
+                                st.warning("⚠️ No se ha adjuntado un enlace válido para este partido.")
                         else:
                             st.info("🕒 Los realizadores audiovisuales están procesando y optimizando el video de este partido. ¡Disponible muy pronto!")
             else:
@@ -234,7 +247,6 @@ with tab_admin:
             
         st.write("---")
         
-        # 🚀 MODIFICADO: Opción 1 renombrada a "Añadir Equipo" perfectamente
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
@@ -270,11 +282,9 @@ with tab_admin:
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
             col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP")
             
-        # 🚀 1. AÑADIR EQUIPO (GLOBAL) - CAMBIO APLICADO AQUÍ
+        # 1. AÑADIR EQUIPO (GLOBAL)
         elif opcion_admin == "🛡️ 1. Añadir Equipo (GLOBAL)":
             st.write("#### 🛡️ Registrar y Activar un Nuevo Equipo en Focus")
-            st.write("Completa el nombre abajo para abrirle su catálogo de streaming y habilitarlo en el sistema.")
-            
             nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
             if st.button("🚀 CREAR Y ACTIVAR EQUIPO EN LA RED", width='stretch'):
                 if nuevo_equipo_nombre:
@@ -303,7 +313,7 @@ with tab_admin:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado con éxito!")
 
-        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
+        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO) - CORREGIDO TEXTO "VS" 🚀
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             st.write(f"📢 *Sincronización vinculada automáticamente al calendario de Focus:* `{FOCUS_CALENDAR_DEFAULT}`")
@@ -319,7 +329,8 @@ with tab_admin:
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
             
-            rival_nombre_libre = st.text_input("Nombre del Rival (Texto Libre):", placeholder="Ej: Millonarios FC, Los de Siempre")
+            # Quitamos el prefijo 'vs' de aquí para que la app lo pinte estético y no se duplique
+            rival_nombre_libre = st.text_input("Nombre del Rival (Texto Libre):", placeholder="Ej: Millonarios FC, Ecopetrol")
             
             producto_formato_cerrado = st.selectbox(
                 "Tipo de Contenido / Producto Focus (Catálogo Comercial):",
@@ -339,7 +350,7 @@ with tab_admin:
             
             if st.button("💾 Procesar y Publicar en la Plataforma", width='stretch'):
                 if rival_nombre_libre:
-                    titulo_combinado_final = f"vs {rival_nombre_libre} - {producto_formato_cerrado}"
+                    titulo_combinado_final = f"{rival_nombre_libre} - {producto_formato_cerrado}"
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
                     
                     exito_excel = agregar_fila_excel("PARTIDOS", [equipo_sel, fecha_str, titulo_combinado_final, estatus_sel, link_sel, recaudo_sel])
@@ -366,7 +377,7 @@ with tab_admin:
             mes_m = st.selectbox("Mes Cobrado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
             monto_m = st.number_input("Monto de la Mensualidad ($ COP):", min_value=0, value=350000, step=50000)
             estado_m = st.selectbox("Estado de Caja:", ["Pagado", "Pendiente"])
-            if st.button("💾 Guardar Registro Mensual", width='stretch'):
+            if st.button("💾 Guardar Registro推 Mensual", width='stretch'):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
                 if exito: st.success("💳 Mensualidad anotada con éxito en la tesorería.")
 
