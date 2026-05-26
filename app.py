@@ -159,7 +159,7 @@ with tab_padres:
                         elif es_fecha_futura:
                             st.info("🎯 Nuestro equipo técnico ya tiene agendado este partido. Las cámaras de Accusport estarán listas en la cancha.")
                         elif estatus == "listo":
-                            # 🚀 REPRODUCTOR INTELIGENTE OPTIMIZADO CONTRA ERRORES
+                            # REPRODUCTOR INTELIGENTE OPTIMIZADO CONTRA ERRORES
                             if link_drive and "drive.google.com" in link_drive:
                                 video_id = None
                                 try:
@@ -174,12 +174,10 @@ with tab_padres:
                                         st.write("")
                                         st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, width='stretch')
                                     else:
-                                        # Si es un link de Drive pero no un archivo directo (ej: una carpeta)
                                         st.link_button("📺 ABRIR CARPETA DE VIDEOS EN DRIVE", link_drive, width='stretch')
                                 except Exception:
                                     st.link_button("📺 VER REPRODUCCIÓN EXTERNA", link_drive, width='stretch')
                             elif link_drive:
-                                # Si es cualquier otro enlace válido (Youtube, Vimeo, etc.)
                                 st.link_button("📺 VER TRANSMISIÓN EN VIVO", link_drive, width='stretch')
                             else:
                                 st.warning("⚠️ No se ha adjuntado un enlace válido para este partido.")
@@ -313,7 +311,7 @@ with tab_admin:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado con éxito!")
 
-        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO) - CORREGIDO TEXTO "VS" 🚀
+        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             st.write(f"📢 *Sincronización vinculada automáticamente al calendario de Focus:* `{FOCUS_CALENDAR_DEFAULT}`")
@@ -329,7 +327,6 @@ with tab_admin:
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
             
-            # Quitamos el prefijo 'vs' de aquí para que la app lo pinte estético y no se duplique
             rival_nombre_libre = st.text_input("Nombre del Rival (Texto Libre):", placeholder="Ej: Millonarios FC, Ecopetrol")
             
             producto_formato_cerrado = st.selectbox(
@@ -364,7 +361,7 @@ with tab_admin:
                 else:
                     st.error("⚠️ Por favor escribe el nombre del rival.")
 
-        # 4. REGISTRAR COBRO MENSUAL (VIP)
+        # 4. REGISTRAR COBRO MENSUAL (VIP) - REPARADO AQUÍ CORREGIDO EL TYPO 🚀
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
             st.write("#### 💳 Control de Mensualidades de Clubes VIP")
             df_p_init = obtener_datos_pestana("PARTIDOS")
@@ -377,7 +374,7 @@ with tab_admin:
             mes_m = st.selectbox("Mes Cobrado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
             monto_m = st.number_input("Monto de la Mensualidad ($ COP):", min_value=0, value=350000, step=50000)
             estado_m = st.selectbox("Estado de Caja:", ["Pagado", "Pendiente"])
-            if st.button("💾 Guardar Registro推 Mensual", width='stretch'):
+            if st.button("💾 Guardar Registro Mensual", width='stretch'):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
                 if exito: st.success("💳 Mensualidad anotada con éxito en la tesorería.")
 
