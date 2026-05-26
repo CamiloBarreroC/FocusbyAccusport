@@ -21,8 +21,8 @@ if "nombre_admin" not in st.session_state:
     st.session_state["nombre_admin"] = ""
 if "ver_galeria" not in st.session_state:
     st.session_state["ver_galeria"] = False
-if "info_jugador_activo" not in st.session_state:
-    st.session_state["info_jugador_activo"] = {}
+if "equipo_activo" not in st.session_state:
+    st.session_state["equipo_activo"] = ""
 
 # Función para conectar con Google Sheets de forma segura usando la llave de los Secrets
 @st.cache_resource
@@ -64,40 +64,39 @@ def obtener_datos_pestana(nombre_pestana):
 
 # --- DISEÑO DEL PORTAL WEB ---
 st.title("⚽ Focus by Accusport")
-st.subheader("Portal Oficial de Grabaciones y Control Administrativo")
+st.subheader("Portal Oficial de Grabaciones Deportivas")
 st.write("---")
 
 # División de la aplicación en dos grandes pestañas interactivas
-tab_padres, tab_admin = st.tabs(["👪 Ingreso Padres / Clientes", "🔒 Control Administrativo"])
+tab_padres, tab_admin = st.tabs(["👪 Galería para Padres", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DE PADRES (CON REPRODUCTOR DE VIDEO INTEGRADO)
+# SECCIÓN 1: INTERFAZ DE PADRES (BÚSQUEDA DIRECTA POR EQUIPO)
 # =====================================================================
 with tab_padres:
     
+    # CASO INTERFAZ A: Modo Galería Activo (Muestra los videos del equipo seleccionado)
     if st.session_state["ver_galeria"]:
-        info = st.session_state["info_jugador_activo"]
+        equipo = st.session_state["equipo_activo"]
         
         if st.button("⬅️ Volver a la lista de equipos"):
             st.session_state["ver_galeria"] = False
-            st.session_state["info_jugador_activo"] = {}
+            st.session_state["equipo_activo"] = ""
             st.rerun()
             
-        st.write(f"### 🎬 Galería de Videos: **{info['hijo']}**")
-        st.markdown(f"🏟️ **Equipo:** {info['equipo']} | 👨‍👦 **Acudiente:** {info['papa']}")
+        st.write(f"### 🎬 Cartelera de Videos: **{equipo}**")
+        st.write("Disfruta de las grabaciones y resúmenes directamente aquí abajo:")
         st.write("---")
         
-        with st.spinner("Cargando tus partidos grabados..."):
+        with st.spinner("Cargando partidos de la categoría..."):
             df_partidos = obtener_datos_pestana("PARTIDOS")
             
-        if not df_partidos.empty and "Documento_Papa" in df_partidos.columns:
-            df_partidos["Documento_Papa"] = df_partidos["Documento_Papa"].astype(str).str.strip()
-            partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == info["documento"]]
+        if not df_partidos.empty and "Equipo" in df_partidos.columns:
+            df_partidos["Equipo"] = df_partidos["Equipo"].astype(str).str.strip()
+            # Filtramos todos los partidos que pertenezcan a este equipo
+            partidos_filtrados = df_partidos[df_partidos["Equipo"] == equipo]
             
             if not partidos_filtrados.empty:
-                st.write("Disfruta de tus partidos directamente aquí abajo:")
-                
-                # Renderizamos los partidos uno abajo del otro en formato de pantalla grande cinematográfica
                 for index_fila, row in partidos_filtrados.iterrows():
                     rival = row.get('Rival/Partido', 'Rival Desconocido')
                     fecha = row.get('Fecha', 'S/F')
@@ -105,76 +104,62 @@ with tab_padres:
                     link_drive = str(row.get('Link_Download_Drive', '')).strip()
                     
                     with st.container(border=True):
-                        st.markdown(f"### 🆚 Partido contra {rival}")
-                        st.markdown(f"📅 **Fecha:** {fecha} | 🎥 **Estatus:** 🟢 Disponible en Alta Definición")
+                        st.markdown(f"### 🆚 {rival}")
+                        st.markdown(f"📅 **Fecha del Encuentro:** {fecha}")
                         
-                        if link_drive and "drive.google.com" in link_drive:
-                            # 🚀 REPRODUCTOR PRO: Extraemos el ID del video para incrustar el reproductor nativo
-                            video_id = None
-                            try:
-                                if "/file/d/" in link_drive:
-                                    video_id = link_drive.split("/file/d/")[1].split("/")[0]
-                                elif "id=" in link_drive:
-                                    video_id = link_drive.split("id=")[1].split("&")[0]
-                                    
-                                if video_id:
-                                    # Generamos el enlace de incrustación profesional
-                                    embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
-                                    # Incrustamos el reproductor de video directamente en la pantalla
-                                    components.iframe(embed_url, height=450, scrolling=False)
-                                else:
-                                    st.warning("⚠️ El enlace de Drive no tiene un formato válido.")
-                                    st.link_button("🔗 Abrir enlace externo alternativo", link_drive, use_container_width=True)
-                            except Exception as e:
-                                st.link_button("📺 VER VIDEO (Enlace Externo)", link_drive, use_container_width=True)
-                        else:
-                            st.info("🕒 Este video se está procesando técnicamente. El reproductor aparecerá aquí automáticamente.")
-            else:
-                st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
-        else:
-            st.error("❌ No se pudo conectar a la tabla de partidos o falta la columna 'Documento_Papa'.")
-
-    else:
-        st.write("### 🔍 Consulta tus partidos grabados")
-        st.write("Selecciona tu equipo y busca el nombre del jugador para acceder a la cartelera de videos.")
-        
-        with st.spinner("Sincronizando cartelera deportiva..."):
-            df_usuarios = obtener_datos_pestana("USUARIOS")
-            
-        if not df_usuarios.empty:
-            df_usuarios["Equipo"] = df_usuarios["Equipo"].astype(str).str.strip()
-            df_usuarios["Hijo_Jugador"] = df_usuarios["Hijo_Jugador"].astype(str).str.strip()
-            
-            columnas_requeridas = ["Equipo", "Hijo_Jugador", "Documento", "Nombre_Papa"]
-            columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
-            
-            if columnas_faltantes:
-                st.error(f"🚨 Títulos incorrectos en Excel. Falta la columna: **{columnas_faltantes[0]}**")
-            else:
-                lista_equipos = sorted([eq for eq in df_usuarios["Equipo"].unique() if eq])
-                equipo_seleccionado = st.selectbox("1. Selecciona el Equipo de tu Hijo:", ["-- Selecciona un equipo --"] + lista_equipos)
-                
-                if equipo_seleccionado != "-- Selecciona un equipo --":
-                    df_filtrado_equipo = df_usuarios[df_usuarios["Equipo"] == equipo_seleccionado]
-                    lista_hijos = sorted([hj for hj in df_filtrado_equipo["Hijo_Jugador"].unique() if hj])
-                    
-                    hijo_seleccionado = st.selectbox("2. Selecciona el Nombre del Jugador (Hijo):", ["-- Selecciona al jugador --"] + lista_hijos)
-                    
-                    if hijo_seleccionado != "-- Selecciona al jugador --":
-                        st.write("")
-                        if st.button("🚀 ENTRAR A MI GALERÍA DE VIDEOS", use_container_width=True):
-                            usuario_info = df_filtrado_equipo[df_filtrado_equipo["Hijo_Jugador"] == hijo_seleccionado].iloc[0]
+                        if str(estatus).lower() == "listo":
+                            st.markdown("🎥 **Estatus:** 🟢 Disponible en Alta Definición")
                             
-                            st.session_state["info_jugador_activo"] = {
-                                "documento": str(usuario_info["Documento"]).strip(),
-                                "hijo": hijo_seleccionado,
-                                "equipo": equipo_seleccionado,
-                                "papa": usuario_info["Nombre_Papa"]
-                            }
-                            st.session_state["ver_galeria"] = True
-                            st.rerun()
+                            if link_drive and "drive.google.com" in link_drive:
+                                video_id = None
+                                try:
+                                    if "/file/d/" in link_drive:
+                                        video_id = link_drive.split("/file/d/")[1].split("/")[0]
+                                    elif "id=" in link_drive:
+                                        video_id = link_drive.split("id=")[1].split("&")[0]
+                                        
+                                    if video_id:
+                                        embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
+                                        components.iframe(embed_url, height=450, scrolling=False)
+                                    else:
+                                        st.warning("⚠️ El enlace de Drive no tiene un formato válido de archivo.")
+                                        st.link_button("🔗 Abrir enlace alternativo", link_drive, use_container_width=True)
+                                except Exception as e:
+                                    st.link_button("📺 VER VIDEO (Enlace Externo)", link_drive, use_container_width=True)
+                            else:
+                                st.warning("⚠️ Falta el enlace del video en la base de datos.")
+                        else:
+                            st.markdown("🎥 **Estatus:** ⏳ En Procesamiento Técnico")
+                            st.info("🕒 Este video se está procesando por nuestro equipo técnico. El reproductor aparecerá aquí automáticamente.")
+            else:
+                st.info(f"ℹ️ No se encontraron grabaciones cargadas para el equipo {equipo} por el momento.")
         else:
-            st.error("❌ La pestaña 'USUARIOS' está vacía. Añade datos en tu Google Sheet.")
+            st.error("❌ No se pudo conectar a la tabla de partidos o falta la columna 'Equipo' en la pestaña PARTIDOS.")
+
+    # CASO INTERFAZ B: Modo Filtros Activo (Selector inicial de equipos)
+    else:
+        st.write("### 🔍 Consulta los partidos de tu equipo")
+        st.write("Selecciona la categoría deportiva para acceder al catálogo exclusivo de reproducciones.")
+        
+        with st.spinner("Sincronizando categorías disponibles..."):
+            df_partidos_init = obtener_datos_pestana("PARTIDOS")
+            
+        if not df_partidos_init.empty and "Equipo" in df_partidos_init.columns:
+            df_partidos_init["Equipo"] = df_partidos_init["Equipo"].astype(str).str.strip()
+            
+            # Sacamos la lista de equipos que ya tienen partidos registrados
+            lista_equipos = sorted([eq for eq in df_partidos_init["Equipo"].unique() if eq])
+            
+            equipo_seleccionado = st.selectbox("Selecciona tu Equipo / Categoría:", ["-- Selecciona un equipo --"] + lista_equipos)
+            
+            if equipo_seleccionado != "-- Selecciona un equipo --":
+                st.write("")
+                if st.button("🚀 ENTRAR A LA GALERÍA DEL EQUIPO", use_container_width=True):
+                    st.session_state["equipo_activo"] = equipo_seleccionado
+                    st.session_state["ver_galeria"] = True
+                    st.rerun()
+        else:
+            st.error("❌ La pestaña 'PARTIDOS' está vacía o la columna 'Equipo' está mal escrita. Agrega al menos un partido en tu Google Sheet para activar el menú.")
 
 # =====================================================================
 # SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BÚNKER)
@@ -214,17 +199,17 @@ with tab_admin:
         
         opcion_tabla = st.radio(
             "Selecciona la base de datos que deseas auditar:", 
-            ["Ver Tabla de Usuarios (Papás)", "Ver Tabla de Partidos (Grabaciones y Enlaces)"]
+            ["Ver Tabla de Usuarios (Mapeo Informativo)", "Ver Tabla de Partidos (Control de Videos)"]
         )
         
         with st.spinner("Sincronizando información..."):
-            if opcion_tabla == "Ver Tabla de Usuarios (Papás)":
+            if opcion_tabla == "Ver Tabla de Usuarios (Mapeo Informativo)":
                 df_adm_u = obtener_datos_pestana("USUARIOS")
                 if not df_adm_u.empty:
-                    st.write(f"**Total de registros:** {len(df_adm_u)} papás.")
+                    st.write(f"**Total de alumnos registrados:** {len(df_adm_u)} jugadores.")
                     st.dataframe(df_adm_u, use_container_width=True)
-            elif opcion_tabla == "Ver Tabla de Partidos (Grabaciones y Enlaces)":
+            elif opcion_tabla == "Ver Tabla de Partidos (Control de Videos)":
                 df_adm_p = obtener_datos_pestana("PARTIDOS")
                 if not df_adm_p.empty:
-                    st.write(f"**Total de registros:** {len(df_adm_p)} partidos.")
+                    st.write(f"**Total de grabaciones montadas:** {len(df_adm_p)} videos.")
                     st.dataframe(df_adm_p, use_container_width=True)
