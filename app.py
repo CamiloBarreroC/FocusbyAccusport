@@ -7,9 +7,12 @@ import json
 from datetime import datetime, timedelta
 
 # =====================================================================
-# 📝 CONFIGURACIÓN INICIAL - CON EL ID DE TU GOOGLE SHEET APLICADO
+# 📝 CONFIGURACIÓN INICIAL - CENTRALIZADA Y SEGURA
 # =====================================================================
 CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4" 
+
+# 🚀 ID MAESTRO DE TU GOOGLE CALENDAR FOCUS BY ACCUSPORT INCORPORADO:
+FOCUS_CALENDAR_DEFAULT = "c_3df55a2bb225d2a2d2054496334a5d7c7f9afca3f9099aea782b278fd9f45472@group.calendar.google.com"
 # =====================================================================
 
 st.set_page_config(page_title="Focus by Accusport", page_icon="⚽", layout="centered")
@@ -88,7 +91,8 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
                 'start': {'dateTime': start_time.isoformat(), 'timeZone': 'America/Bogota'},
                 'end': {'dateTime': end_time.isoformat(), 'timeZone': 'America/Bogota'},
             }
-            service.events().insert(calendarId=calendar_id, body=event).execute()
+            cal_destino = FOCUS_CALENDAR_DEFAULT if calendar_id.lower() == "primary" else calendar_id
+            service.events().insert(calendarId=cal_destino, body=event).execute()
             return True
         except Exception:
             return False
@@ -217,15 +221,12 @@ with tab_admin:
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
         
+        # Sincronizador nativo de primera fila fijo
         with st.expander("🔗 SINCRONIZAR AGENDA CON GOOGLE CALENDAR (CELULAR)", expanded=False):
-            st.write("Ingresa el ID o Correo del calendario para enlazarlo nativamente a tu dispositivo.")
-            cal_id_fijo = st.text_input("Correo electrónico de tu Google Calendar:", placeholder="Ej: contacto@accusport.com", key="cal_fijo_key").strip()
-            
-            if cal_id_fijo and cal_id_fijo.lower() != "primary":
-                url_sincro_fijo = f"https://calendar.google.com/calendar/render?cid={cal_id_fijo}"
+            st.write("Vincula el calendario corporativo de Focus directamente a las pantallas de tus dispositivos.")
+            if FOCUS_CALENDAR_DEFAULT:
+                url_sincro_fijo = f"https://calendar.google.com/calendar/render?cid={FOCUS_CALENDAR_DEFAULT}"
                 st.link_button("💥 VINCULAR ESTE CALENDARIO A MI GOOGLE CALENDAR PERSONAL", url_sincro_fijo, width='stretch')
-            else:
-                st.info("💡 **Para activar el botón de sincronización:** Borra la palabra 'primary' de arriba y escribe el correo electrónico real de tu cuenta de Google Calendar.")
         
         if st.button("🔒 Cerrar Sesión del Panel"):
             st.session_state["admin_autenticado"] = False
@@ -234,6 +235,7 @@ with tab_admin:
             
         st.write("---")
         
+        # Menú administrativamente perfecto ordenado del 1 al 4 cronológicamente 🚀
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
@@ -247,7 +249,7 @@ with tab_admin:
         )
         st.write("---")
         
-        # 📈 TABLERO DE CONTROL FINANCIERO (CORREGIDO DE REÍZ AQUÍ 🚀)
+        # TABLERO DE CONTROL FINANCIERO (Sintaxis Python and purificada)
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
@@ -296,13 +298,14 @@ with tab_admin:
             if st.button("💾 Guardar Cliente", width='stretch'):
                 if nombre_papa and nombre_hijo:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
-                    if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado!")
+                    if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado con éxito!")
 
         # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
-            calendar_id_input = st.text_input("ID o Correo de Google Calendar Destino:", value="primary")
+            st.write(f"📢 *Sincronización vinculada automáticamente al calendario maestro de Focus:* `{FOCUS_CALENDAR_DEFAULT}`")
             st.write("---")
+            
             fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
             
             df_p_init = obtener_datos_pestana("PARTIDOS")
@@ -318,7 +321,7 @@ with tab_admin:
             link_sel = st.text_input("Enlace del Archivo en Google Drive:", value="https://drive.google.com")
             recaudo_sel = st.number_input("Monto Recaudado por esta Venta ($ COP):", min_value=0, value=0, step=10000)
             
-            sincronizar_google = st.checkbox("⚡ ¿Replicar y agendar este partido en los Google Calendars automáticamente?", value=True)
+            sincronizar_google = st.checkbox("⚡ ¿Replicar y agendar este partido en el Google Calendar operativo automáticamente?", value=True)
             
             if st.button("💾 Procesar y Publicar en la Plataforma", width='stretch'):
                 if rival_sel:
@@ -328,8 +331,8 @@ with tab_admin:
                     if exito_excel:
                         st.success("✅ Guardado con éxito en el sistema de streaming para las familias.")
                         if sincronizar_google:
-                            crear_evento_google_calendar(calendar_id_input, rival_sel, fecha_sel, equipo_sel)
-                            st.success("📅 Alerta enviada con éxito a los Google Calendars operativos.")
+                            crear_evento_google_calendar(FOCUS_CALENDAR_DEFAULT, rival_sel, fecha_sel, equipo_sel)
+                            st.success("📅 Alerta enviada con éxito a la cuenta del Google Calendar operativo.")
                         st.balloons()
                 else:
                     st.error("⚠️ Asigna un título al contenido.")
@@ -349,7 +352,7 @@ with tab_admin:
             estado_m = st.selectbox("Estado de Caja:", ["Pagado", "Pendiente"])
             if st.button("💾 Guardar Registro Mensual", width='stretch'):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
-                if exito: st.success("💳 Mensualidad anotada con éxito.")
+                if exito: st.success("💳 Mensualidad anotada con éxito en la tesorería.")
 
         # AUDITAR HOJAS
         elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
