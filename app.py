@@ -232,7 +232,6 @@ with tab_admin:
             
         st.write("---")
         
-        # 🚀 MODIFICADO: Lista reordenada del 1 al 4 cronológicamente según tu negocio
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
@@ -253,12 +252,12 @@ with tab_admin:
             df_m = obtener_datos_pestana("PAGOS_MENSUALES")
             
             total_partidos = 0
-            if not df_p.empty and "Recaudado" in df_p.columns:
+            if not df_p.empty && "Recaudado" in df_p.columns:
                 df_p["Recaudado"] = pd.to_numeric(df_p["Recaudado"], errors="coerce").fillna(0)
                 total_partidos = df_p["Recaudado"].sum()
                 
             total_mensualidades = 0
-            if not df_m.empty and "Monto" in df_m.columns:
+            if not df_m.empty && "Monto" in df_m.columns:
                 df_m["Monto"] = pd.to_numeric(df_m["Monto"], errors="coerce").fillna(0)
                 if "Estado" in df_m.columns:
                     total_mensualidades = df_m[df_m["Estado"] == "Pagado"]["Monto"].sum()
@@ -297,7 +296,7 @@ with tab_admin:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado!")
 
-        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
+        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO) - CORREGIDO AQUÍ 🚀
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             calendar_id_input = st.text_input("ID o Correo de Google Calendar Destino:", value="primary")
@@ -308,7 +307,7 @@ with tab_admin:
             df_u_init = obtener_datos_pestana("USUARIOS")
             set_eqs = set()
             if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
-            if not df_u_init.empty document and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
+            if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
