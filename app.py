@@ -8,16 +8,15 @@ import re
 from datetime import datetime, timedelta
 
 # =====================================================================
-# 📝 CONFIGURACIÓN INICIAL Y CENTRAL DE BRANDING (TUS LOGOS REALES)
+# 📝 CONFIGURACIÓN INICIAL Y CENTRAL DE BRANDING (Motor y Logo Principal)
 # =====================================================================
 CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4" 
 
 # 🚀 ID MAESTRO DE TU GOOGLE CALENDAR FOCUS BY ACCUSPORT:
 FOCUS_CALENDAR_DEFAULT = "c_3df55a2bb225d2a2d2054496334a5d7c7f9afca3f9099aea782b278fd9f45472@group.calendar.google.com"
 
-# 🖼️ RUTAS EXACTAS DE LOS ARCHIVOS EN TU REPOSITORIO:
+# 🖼️ RUTA EXACTA DEL LOGO PRINCIPAL FOCUS (Este sí se carga como imagen):
 PATH_LOGO_FOCUS = "IMG-20260521-WA0004.jpg" 
-PATH_LOGO_ACCUSPORT = "logonew.png"
 # =====================================================================
 
 st.set_page_config(page_title="Focus by Accusport", page_icon="⚽", layout="centered")
@@ -395,6 +394,7 @@ with tab_admin:
             if st.button("🚀 CREAR Y ACTIVAR EQUIPO EN LA RED", width='stretch'):
                 if nuevo_equipo_nombre:
                     fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
+                    # El texto por defecto es simplemente "Focus"
                     exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "Focus", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
                     if exito:
                         st.success(f"¡Golazo! El equipo **{nuevo_equipo_nombre}** ya está oficialmente creado y activo en internet.")
@@ -495,18 +495,15 @@ with tab_admin:
                 st.dataframe(df_audit, use_container_width=True)
 
 # =====================================================================
-# 🦶 PIE DE PÁGINA (FOOTER) - ESCUDO DE MARCA ULTRA-PREMIUM CONTRA ERRORES
+# 🦶 PIE DE PÁGINA (FOOTER) - SELLO DIGITAL PREMIUM EN CÓDIGO
 # =====================================================================
 st.write("---") 
 _, col_footer_center, _ = st.columns([2, 1, 2])
 with col_footer_center:
-    try:
-        st.image(PATH_LOGO_ACCUSPORT, width=65)
-    except Exception:
-        # 🔥 ESCUDO ACTIVO: Renderiza un logotipo digital impecable si la imagen se corrompe
-        st.markdown("""
-            <div style='text-align:center; margin-top:-5px;'>
-                <span style='color:#555555; font-size:10px; font-weight:800; letter-spacing:2px; display:block; margin-bottom:1px;'>POWERED BY</span>
-                <span style='color:#ffffff; font-size:14px; font-weight:900; letter-spacing:1px;'>ACCU<span style='color:#ff5500;'>SPORT</span></span>
-            </div>
-        """, unsafe_allow_html=True)
+    # 🔥 ESCUDO ACTIVO: Renderiza un logotipo digital impecable con código puro
+    st.markdown("""
+        <div style='text-align:center; margin-top:-5px;'>
+            <span style='color:#555555; font-size:10px; font-weight:800; letter-spacing:2px; display:block; margin-bottom:1px;'>POWERED BY</span>
+            <span style='color:#ffffff; font-size:14px; font-weight:900; letter-spacing:1px;'>ACCU<span style='color:#ff5500;'>SPORT</span></span>
+        </div>
+    """, unsafe_allow_html=True)
