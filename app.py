@@ -70,16 +70,16 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["👪 Ingreso Padres / Clientes", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DE PADRES (CON GALERÍA VISUAL DE MINIATURAS)
+# SECCIÓN 1: INTERFAZ DE PADRES (GALERÍA PREMIUM LIMPIA)
 # =====================================================================
 with tab_padres:
     
-    # CASO INTERFAZ A: Modo Galería Activo (Ventana de Videos Estilo YouTube)
+    # CASO INTERFAZ A: Modo Galería Activo (Filtros ocultos, solo tarjetas de video)
     if st.session_state["ver_galeria"]:
         info = st.session_state["info_jugador_activo"]
         
         # Botón elegante para regresar a la búsqueda
-        if st.button("⬅️ Volver a buscar otro jugador"):
+        if st.button("⬅️ Volver a la lista de equipos"):
             st.session_state["ver_galeria"] = False
             st.session_state["info_jugador_activo"] = {}
             st.rerun()
@@ -96,46 +96,39 @@ with tab_padres:
             partidos_filtrados = df_partidos[df_partidos["Documento_Papa"] == info["documento"]]
             
             if not partidos_filtrados.empty:
-                st.write("Selecciona cualquiera de tus partidos disponibles abajo para abrir el video:")
+                st.write("Selecciona el partido que deseas reproducir:")
                 
-                # 🚀 Creación de la cuadrícula visual (Grid de 2 columnas para que parezcan tarjetas de video)
+                # Grid de 2 columnas para distribución de tarjetas estilo catálogo
                 cols = st.columns(2)
                 
                 for idx, (index_fila, row) in enumerate(partidos_filtrados.iterrows()):
                     rival = row.get('Rival/Partido', 'Rival Desconocido')
                     fecha = row.get('Fecha', 'S/F')
                     estatus = row.get('Estatus_Grabacion', 'Procesando')
-                    pago = row.get('Estado_Pago', 'Pendiente')
                     link_drive = row.get('Link_Download_Drive', '')
                     
-                    # Distribuimos los partidos equitativamente entre la columna izquierda y derecha
                     with cols[idx % 2]:
-                        # Contenedor visual tipo tarjeta
+                        # Contenedor estético de la tarjeta
                         with st.container(border=True):
-                            # Miniatura por defecto de alta calidad (Cancha de fútbol/Cámara)
-                            st.image("https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=500&auto=format&fit=crop&q=60", 
-                                     caption=f"Focus Match Cam - {fecha}", use_container_width=True)
+                            # Encabezado digital nativo (Adiós imágenes rotas externas)
+                            st.markdown("🌐 **FOCUS MATCH CAM**")
+                            st.write("---")
                             
-                            st.markdown(f"#### 🆚 vs {rival}")
-                            st.markdown(f"📅 **Fecha:** {fecha}")
+                            st.markdown(f"### 🆚 {rival}")
+                            st.markdown(f"📅 **Fecha del Encuentro:** {fecha}")
                             
-                            # Indicadores de estatus estéticos
-                            if str(pago).lower() == "pagado":
-                                st.markdown("💰 **Pago:** 🟢 Confirmado")
-                            else:
-                                st.markdown("💰 **Pago:** 🟡 Pendiente / Por Verificar")
-                                
+                            # Filtro visual: Solo mostramos la disponibilidad de la filmación
                             if str(estatus).lower() == "listo":
-                                st.markdown("🎥 **Video:** 🟢 Disponible")
+                                st.markdown("🎥 **Video:** 🟢 Disponible Ahora")
                             else:
-                                st.markdown("🎥 **Video:** 🔵 En Procesamiento")
+                                st.markdown("🎥 **Video:** ⏳ En Procesamiento Técnico")
                             
                             st.write("")
-                            # Botón de acción directo para ver el video
+                            # Botón de acción directo
                             if link_drive and str(link_drive).startswith("http"):
                                 st.link_button("📺 VER REPRODUCCIÓN / DESCARGAR", link_drive, use_container_width=True)
                             else:
-                                st.info("🕒 El enlace se activará automáticamente cuando el video termine de renderizarse.")
+                                st.info("🕒 El enlace se activará automáticamente cuando el video termine de subirse.")
             else:
                 st.info("ℹ️ No se encontraron grabaciones asignadas a este jugador por el momento.")
         else:
@@ -153,7 +146,6 @@ with tab_padres:
             df_usuarios["Equipo"] = df_usuarios["Equipo"].astype(str).str.strip()
             df_usuarios["Hijo_Jugador"] = df_usuarios["Hijo_Jugador"].astype(str).str.strip()
             
-            # Validar columnas
             columnas_requeridas = ["Equipo", "Hijo_Jugador", "Documento", "Nombre_Papa"]
             columnas_faltantes = [col for col in columnas_requeridas if col not in df_usuarios.columns]
             
@@ -174,7 +166,6 @@ with tab_padres:
                     if hijo_seleccionado != "-- Selecciona al jugador --":
                         st.write("")
                         if st.button("🚀 ENTRAR A MI GALERÍA DE VIDEOS", use_container_width=True):
-                            # Capturamos los datos del alumno y disparamos la ventana de galería
                             usuario_info = df_filtrado_equipo[df_filtrado_equipo["Hijo_Jugador"] == hijo_seleccionado].iloc[0]
                             
                             st.session_state["info_jugador_activo"] = {
