@@ -170,14 +170,13 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 # =====================================================================
 # 📐 CABECERA DE MARCA - SOLO LOGO FOCUS CENTRADO
 # =====================================================================
-# Usamos columnas para centrar la imagen principal
 _, col_logo_center, _ = st.columns([1, 4, 1])
 with col_logo_center:
     try:
-        # Mostramos el logo de Focus ocupando buen ancho centrado
         st.image(PATH_LOGO_FOCUS, use_container_width=True)
-    except Exception:
+    except Exception as e:
         st.markdown("<h1 style='text-align:center; margin:0; font-size:45px; letter-spacing:-1px; color:#ffffff;'>⚡ FO<span style='color:#ff5500;'>CUS</span></h1>", unsafe_allow_html=True)
+        st.caption(f"Debug principal: {e}")
 
 st.write("---")
 
@@ -245,9 +244,10 @@ with tab_padres:
                         texto_rival_limpio = texto_rival_limpio[2:].strip()
                     
                     with st.container(border=True):
-                        if "bienvenidos a focus" in rival.lower():
+                        # 🚀 RECONOCIMIENTO OPTIMIZADO PARA LA NUEVA BIENVENIDA "FOCUS"
+                        if "bienvenidos a focus" in rival.lower() or rival.lower() == "focus":
                             st.markdown(f"✨ <span style='color:#ff5500; font-weight:700;'>BIENVENIDA OFICIAL A TU GALERÍA</span>", unsafe_allow_html=True)
-                            st.markdown(f"## {rival}")
+                            st.markdown(f"## Focus")
                         elif es_fecha_futura:
                             st.markdown(f"🎥 <span style='color:#ff5500; font-weight:700;'>COBERTURA EN VIVO PROGRAMADA</span>", unsafe_allow_html=True)
                             st.markdown(f"## 🆚 {texto_rival_limpio}")
@@ -261,7 +261,7 @@ with tab_padres:
                         st.markdown(f"📅 **Fecha del Encuentro:** {fecha_str}")
                         st.write("---")
                         
-                        if "bienvenidos a focus" in rival.lower():
+                        if "bienvenidos a focus" in rival.lower() or rival.lower() == "focus":
                             st.info("👋 ¡Hola Familias! Bienvenidos a su plataforma Focus.")
                         elif es_fecha_futura:
                             st.info("🎯 Nuestro equipo técnico ya tiene agendado este partido. Las cámaras de Accusport estarán listas en la cancha.")
@@ -397,7 +397,8 @@ with tab_admin:
             if st.button("🚀 CREAR Y ACTIVAR EQUIPO EN LA RED", width='stretch'):
                 if nuevo_equipo_nombre:
                     fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
-                    exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "✨ ¡Bienvenidos a Focus por Accusport!", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
+                    # 🚀 MODIFICADO: Ahora el texto por defecto es simplemente "Focus"
+                    exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "Focus", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
                     if exito:
                         st.success(f"¡Golazo! El equipo **{nuevo_equipo_nombre}** ya está oficialmente creado y activo en internet.")
                         st.balloons()
@@ -499,12 +500,11 @@ with tab_admin:
 # =====================================================================
 # 🦶 PIE DE PÁGINA (FOOTER) - LOGO ACCUSPORT PEQUEÑO Y CENTRADO
 # =====================================================================
-st.write("---") # Separador visual al final de los tabs
-# Columnas para centrar el logo pequeñito
+st.write("---") 
 _, col_footer_center, _ = st.columns([2, 1, 2])
 with col_footer_center:
     try:
-        # Mostramos el logo de Accusport muy pequeñito (width=60)
         st.image(PATH_LOGO_ACCUSPORT, width=60)
-    except Exception:
+    except Exception as e:
         st.markdown("<p style='text-align:center; font-size:10px; color:#555555;'>by ACCUSPORT</p>", unsafe_allow_html=True)
+        st.caption(f"Debug pie: {e}")
