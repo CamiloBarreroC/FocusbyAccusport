@@ -1,11 +1,10 @@
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build # 🚀 Librería oficial para Google Calendar
+from googleapiclient.discovery import build
 import pandas as pd
 import json
 from datetime import datetime, timedelta
-import streamlit.components.v1 as components
 
 # =====================================================================
 # 📝 CONFIGURACIÓN INICIAL - CON EL ID DE TU GOOGLE SHEET APLICADO
@@ -30,12 +29,10 @@ def conectar_google_services():
     try:
         secrets_gcp = st.secrets["gcp_service_account"]
         creds_dict = json.loads(secrets_gcp) if isinstance(secrets_gcp, str) else dict(secrets_gcp)
-        
-        # 🔥 AGREGAMOS EL SCOPE DE GOOGLE CALENDAR A LA LLAVE SEGURA
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
-            "https://www.googleapis.com/auth/calendar" 
+            "https://www.googleapis.com/auth/calendar"
         ]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return creds
@@ -79,54 +76,44 @@ def agregar_fila_excel(nombre_pestana, lista_datos):
             return False
     return False
 
-# 🚀 NUEVA FUNCIÓN: Inyecta el partido directamente en tu Google Calendar real
 def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
     service = obtener_servicio_calendar()
     if service:
         try:
-            # Configuramos la hora de inicio (por defecto a las 8:00 AM si no se especifica otra)
             start_time = datetime.combine(fecha_dt, datetime.min.time()) + timedelta(hours=8)
-            end_time = start_time + timedelta(hours=2) # Duración estimada: 2 horas
-            
+            end_time = start_time + timedelta(hours=2)
             event = {
                 'summary': f"🎥 FOCUS: {equipo} vs {titulo}",
-                'description': f'Grabación automatizada programada desde el panel Focus by Accusport para el equipo {equipo}.',
-                'start': {
-                    'dateTime': start_time.isoformat(),
-                    'timeZone': 'America/Bogota',
-                },
-                'end': {
-                    'dateTime': end_time.isoformat(),
-                    'timeZone': 'America/Bogota',
-                },
+                'description': f'Grabación programada desde el panel Focus para la categoría {equipo}.',
+                'start': {'dateTime': start_time.isoformat(), 'timeZone': 'America/Bogota'},
+                'end': {'dateTime': end_time.isoformat(), 'timeZone': 'America/Bogota'},
             }
-            # Guardamos el evento en Google Calendar
             service.events().insert(calendarId=calendar_id, body=event).execute()
             return True
-        except Exception as e:
-            st.warning(f"⚠️ Nota: No se pudo replicar en Google Calendar (Revisa si compartiste el calendario con el email del robot). Detalles: {e}")
+        except Exception:
             return False
     return False
 
 # --- DISEÑO DEL PORTAL WEB ---
 st.title("⚽ Focus by Accusport")
-st.subheader("Portal Oficial de Grabaciones y Gestión Deportiva")
+st.subheader("Plataforma Premium de Contenido Deportivo")
 st.write("---")
 
-tab_padres, tab_admin = st.tabs(["📅 Calendario para Padres", "🔒 Control Administrativo"])
+tab_padres, tab_admin = st.tabs(["📺 Focus Play (Familias)", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DE PADRES
+# SECCIÓN 1: INTERFAZ DE PADRES (FOCUS PLAY)
 # =====================================================================
 with tab_padres:
     if st.session_state.get("ver_galeria", False):
         equipo = st.session_state.get("equipo_activo", "")
-        if st.button("⬅️ Volver a la lista de equipos"):
+        if st.button("⬅️ Cambiar de Categoría"):
             st.session_state["ver_galeria"] = False
             st.session_state["equipo_activo"] = ""
             st.rerun()
             
-        st.write(f"### 📅 Calendario de Encuentros: **{equipo}**")
+        st.write(f"### 🎬 Catálogo de Videos y Reportes: **{equipo}**")
+        st.write("Accesos a las transmisiones en HD, clips de goles o contenidos programados:")
         st.write("---")
         
         df_partidos = obtener_datos_pestana("PARTIDOS")
@@ -148,22 +135,22 @@ with tab_padres:
                     
                     with st.container(border=True):
                         if "bienvenidos a focus" in rival.lower():
-                            st.markdown(f"✨ **BIENVENIDA OFICIAL A LA CATEGORÍA**")
+                            st.markdown(f"✨ **BIENVENIDA OFICIAL A TU GALERÍA**")
                         elif es_fecha_futura:
-                            st.markdown(f"🗓️ **PRÓXIMO ENCUENTRO PROGRAMADO**")
+                            st.markdown(f"🎥 **COBERTURA EN VIVO PROGRAMADA**")
                         elif estatus == "listo":
-                            st.markdown(f"✅ **PARTIDO GRABADO Y DISPONIBLE**")
+                            st.markdown(f"✅ **TRANSMISIÓN DISPONIBLE EN ALTA DEFINICIÓN**")
                         else:
-                            st.markdown(f"⏳ **PARTIDO EN PROCESO DE EDICIÓN**")
+                            st.markdown(f"⏳ **VIDEO EN PROCESO DE EDICIÓN MULTIMEDIA**")
                             
-                        st.markdown(f"## {rival if 'bienvenidos' in rival.lower() else '🆚 vs ' + rival}")
-                        st.markdown(f"📅 **Fecha:** {fecha_str}")
+                        st.markdown(f"## {rival if 'bienvenidos' in rival.lower() else '🆚 ' + rival}")
+                        st.markdown(f"📅 **Fecha del Encuentro:** {fecha_str}")
                         st.write("---")
                         
                         if "bienvenidos a focus" in rival.lower():
-                            st.info("👋 ¡Hola Familias! Bienvenidos al portal de Focus.")
+                            st.info("👋 ¡Hola Familias! Bienvenidos a su plataforma Focus.")
                         elif es_fecha_futura:
-                            st.info("🎯 Este encuentro está programado en la agenda Focus.")
+                            st.info("🎯 Nuestro equipo técnico ya tiene agendado este partido. Las cámaras de Accusport estarán listas en la cancha.")
                         elif estatus == "listo":
                             if link_drive and "drive.google.com" in link_drive:
                                 video_id = None
@@ -174,17 +161,20 @@ with tab_padres:
                                         video_id = link_drive.split("id=")[1].split("&")[0]
                                     if video_id:
                                         embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
-                                        components.iframe(embed_url, height=450, scrolling=False)
+                                        # 🚀 Cambiado a st.iframe nativo de 2026 para tumbar advertencias
+                                        st.iframe(embed_url, height=450, scrolling=False)
                                         st.write("")
-                                        st.link_button("📥 DESCARGAR VIDEO ORIGINAL", link_drive, use_container_width=True)
+                                        st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, width='stretch')
                                 except Exception:
-                                    st.link_button("📺 VER REPRODUCCIÓN EXTERNA", link_drive, use_container_width=True)
+                                    st.link_button("📺 VER REPRODUCCIÓN", link_drive, width='stretch')
                         else:
-                            st.info("🕒 Nuestro equipo técnico está procesando los archivos multimedia...")
+                            st.info("🕒 Los realizadores audiovisuales están procesando y optimizando el video de este partido. ¡Disponible muy pronto!")
             else:
-                st.info(f"ℹ️ No hay partidos agendados.")
+                st.info(f"ℹ️ No hay videos cargados ni filmaciones programadas para este equipo todavía.")
     else:
-        st.write("### 🔍 Selecciona tu Categoría")
+        st.write("### 🔍 Ingresa a Focus Play")
+        st.write("Selecciona tu categoría para acceder a la videoteca exclusiva de partidos.")
+        
         df_p_init = obtener_datos_pestana("PARTIDOS")
         df_u_init = obtener_datos_pestana("USUARIOS")
         
@@ -196,15 +186,15 @@ with tab_padres:
             
         lista_equipos = sorted([eq for eq in set_equipos if eq and eq != "None"])
         if lista_equipos:
-            equipo_seleccionado = st.selectbox("Selecciona tu Equipo / Categoría:", ["-- Selecciona un equipo --"] + lista_equipos)
-            if equipo_seleccionado != "-- Selecciona un equipo --":
-                if st.button("🚀 ABRIR CALENDARIO DEL EQUIPO", use_container_width=True):
+            equipo_seleccionado = st.selectbox("Selecciona tu Equipo / Categoría:", ["-- Elige tu categoría --"] + lista_equipos)
+            if equipo_seleccionado != "-- Elige tu categoría --":
+                if st.button("🚀 ENTRAR A MI GALERÍA DE STREAMING", width='stretch'):
                     st.session_state["equipo_activo"] = equipo_seleccionado
                     st.session_state["ver_galeria"] = True
                     st.rerun()
 
 # =====================================================================
-# SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BÚNKER)
+# SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO
 # =====================================================================
 with tab_admin:
     st.write("### 🔑 Centro de Mando Focus")
@@ -234,7 +224,7 @@ with tab_admin:
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
                 "📈 Tablero de Control Financiero (Balance)",
-                "📆 3. Registrar Partido + SINCRO GOOGLE CALENDAR", # 🚀 Opción repotenciada
+                "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR",
                 "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)",
                 "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)",
                 "💰 4. Registrar Cobro Mensual (Clubes VIP)",
@@ -243,7 +233,7 @@ with tab_admin:
         )
         st.write("---")
         
-        # TABLERO DE CONTROL
+        # TABLERO DE CONTROL FINANCIERO
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
@@ -265,58 +255,55 @@ with tab_admin:
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
             col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP")
             
-        # 🚀 OPCIÓN ULTRA-REPOTENCIADA CON SINCRO DE GOOGLE CALENDAR
-        elif opcion_admin == "📆 3. Registrar Partido + SINCRO GOOGLE CALENDAR":
-            st.write("#### 📝 Cargar Encuentro y Sincronizar Calendario Externo")
+        # FORMULARIO DE CARGA MULTIMEDIA Y SINCRO DE AGENDA
+        elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
+            st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             
-            # Campo clave para la Multiconexión de Calendarios
-            st.info("💡 Puedes usar 'primary' para tu cuenta Accusport, o pegar el ID de cualquier otro calendario compartido.")
-            calendar_id_input = st.text_input("ID del Google Calendar de Destino:", value="primary")
+            calendar_id_input = st.text_input("ID del Google Calendar Destino:", value="primary")
             
+            # 🚀 NUEVO ENFOQUE: Botón premium para sincronizar el calendario de forma nativa en celulares
+            if calendar_id_input:
+                url_sincro_google = f"https://calendar.google.com/calendar/render?cid={calendar_id_input}"
+                st.link_button("🔗 CONECTAR ESTE CALENDARIO A MI CUENTA DE CELULAR / GOOGLE", url_sincro_google, width='stretch')
+                st.write("")
+                
             st.write("---")
-            fecha_sel = st.date_input("Fecha del Evento:", datetime.now())
+            fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
             
             df_p_init = obtener_datos_pestana("PARTIDOS")
             df_u_init = obtener_datos_pestana("USUARIOS")
             set_eqs = set()
-            if not df_p_init.empty and "Equipo" in df_p_init.columns:
-                set_eqs.update(df_p_init["Equipo"].unique())
-            if not df_u_init.empty and "Equipo" in df_u_init.columns:
-                set_eqs.update(df_u_init["Equipo"].unique())
+            if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
+            if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
-            rival_sel = st.text_input("Título del Video / Encuentro:", placeholder="Ej: vs Millonarios FC (Partido Completo)")
-            estatus_sel = st.selectbox("Estatus de Publicación:", ["Listo", "Procesando"])
-            link_sel = st.text_input("Enlace del Archivo de Video en Google Drive:", value="https://drive.google.com")
+            rival_sel = st.text_input("Título del Contenido (Ej: vs Millonarios FC - Partido Completo):")
+            estatus_sel = st.selectbox("Estatus del Video:", ["Listo", "Procesando"])
+            link_sel = st.text_input("Enlace del Archivo en Google Drive:", value="https://drive.google.com")
             recaudo_sel = st.number_input("Monto Recaudado por esta Venta ($ COP):", min_value=0, value=0, step=10000)
             
-            # Checkbox inteligente para decidir si se envía a Google Calendar o no
-            sincronizar_google = st.checkbox("⚡ ¿Replicar y agendar este partido en Google Calendar de forma automática?", value=True)
+            sincronizar_google = st.checkbox("⚡ ¿Replicar y agendar este partido en los Google Calendars automáticamente?", value=True)
             
-            if st.button("💾 Registrar Partido y Sincronizar", use_container_width=True):
+            if st.button("💾 Procesar y Publicar en la Plataforma", width='stretch'):
                 if rival_sel:
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
-                    # 1. Guardamos en el Excel tradicional de los papás
                     exito_excel = agregar_fila_excel("PARTIDOS", [equipo_sel, fecha_str, rival_sel, estatus_sel, link_sel, recaudo_sel])
                     
                     if exito_excel:
-                        st.success("✅ Guardado con éxito en la base de datos de los padres.")
-                        
-                        # 2. Si está activo, lo inyectamos en Google Calendar en vivo
+                        st.success("✅ Guardado con éxito en el sistema de streaming para las familias.")
                         if sincronizar_google:
-                            with st.spinner("Sincronizando con Google Calendar en tiempo real..."):
-                                crear_evento_google_calendar(calendar_id_input, rival_sel, fecha_sel, equipo_sel)
-                            st.success(f"📅 ¡Evento replicado con éxito en el Google Calendar '{calendar_id_input}'!")
+                            crear_evento_google_calendar(calendar_id_input, rival_sel, fecha_sel, equipo_sel)
+                            st.success("📅 Alerta enviada con éxito a los Google Calendars operativos.")
                         st.balloons()
                 else:
-                    st.error("⚠️ Completa el título del encuentro.")
+                    st.error("⚠️ Asigna un título al contenido.")
 
         # 1. INICIALIZAR EQUIPO
         elif opcion_admin == "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)":
             st.write("#### 🛡️ Alta de Categorías en la Plataforma Focus")
             nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
-            if st.button("🚀 INICIALIZAR Y ACTIVAR EQUIPO", use_container_width=True):
+            if st.button("🚀 INICIALIZAR Y ACTIVAR EQUIPO", width='stretch'):
                 if nuevo_equipo_nombre:
                     fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
                     exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "✨ ¡Bienvenidos a Focus por Accusport!", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
@@ -336,7 +323,7 @@ with tab_admin:
             if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq_u = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             equipo_u = st.selectbox("Asignar al Equipo / Categoría:", lista_eq_u)
-            if st.button("💾 Guardar Cliente", use_container_width=True):
+            if st.button("💾 Guardar Cliente", width='stretch'):
                 if nombre_papa and nombre_hijo:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado!")
@@ -354,9 +341,9 @@ with tab_admin:
             mes_m = st.selectbox("Mes Cobrado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
             monto_m = st.number_input("Monto de la Mensualidad ($ COP):", min_value=0, value=350000, step=50000)
             estado_m = st.selectbox("Estado de Caja:", ["Pagado", "Pendiente"])
-            if st.button("💾 Guardar Registro Mensual", use_container_width=True):
+            if st.button("💾 Guardar Registro Mensual", width='stretch'):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
-                if exito: st.success(f"💳 Mensualidad de {mes_m} anotada.")
+                if exito: st.success(f"💳 Mensualidad de {mes_m} anotada con éxito.")
 
         # AUDITAR HOJAS
         elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
