@@ -215,18 +215,15 @@ with tab_admin:
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
         
-        # 🚀 CONTROL INTELIGENTE DE SINCRONIZACIÓN DE GOOGLE CALENDAR
         with st.expander("🔗 SINCRONIZAR AGENDA CON GOOGLE CALENDAR (CELULAR)", expanded=False):
             st.write("Ingresa el ID o Correo del calendario para enlazarlo nativamente a tu dispositivo.")
-            cal_id_fijo = st.text_input("Correo electrónico de tu Google Calendar:", placeholder="Ej: contacto@accusport.com o tu-correo@gmail.com", key="cal_fijo_key").strip()
+            cal_id_fijo = st.text_input("Correo electrónico de tu Google Calendar:", placeholder="Ej: contacto@accusport.com", key="cal_fijo_key").strip()
             
             if cal_id_fijo and cal_id_fijo.lower() != "primary":
-                # Si ingresan un correo válido, generamos el enlace de Google renderizado perfectamente
                 url_sincro_fijo = f"https://calendar.google.com/calendar/render?cid={cal_id_fijo}"
                 st.link_button("💥 VINCULAR ESTE CALENDARIO A MI GOOGLE CALENDAR PERSONAL", url_sincro_fijo, width='stretch')
             else:
-                # Si dice 'primary' o está vacío, le explicamos amigablemente qué debe poner
-                st.info("💡 **Para activar el botón de sincronización:** Borra la palabra 'primary' de arriba y escribe el correo electrónico real de tu cuenta de Google Calendar (ej: `gerencia@accusport.com`).")
+                st.info("💡 **Para activar el botón de sincronización:** Borra la palabra 'primary' de arriba y escribe el correo electrónico real de tu cuenta de Google Calendar.")
         
         if st.button("🔒 Cerrar Sesión del Panel"):
             st.session_state["admin_autenticado"] = False
@@ -235,13 +232,14 @@ with tab_admin:
             
         st.write("---")
         
+        # 🚀 MODIFICADO: Lista reordenada del 1 al 4 cronológicamente según tu negocio
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
                 "📈 Tablero de Control Financiero (Balance)",
-                "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR",
                 "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)",
                 "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)",
+                "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR",
                 "💰 4. Registrar Cobro Mensual (Clubes VIP)",
                 "👁️ Auditar Hojas de Excel en Vivo"
             ]
@@ -270,10 +268,38 @@ with tab_admin:
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
             col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP")
             
-        # FORMULARIO DE CARGA MULTIMEDIA Y SINCRO DE AGENDA
+        # 1. INICIALIZAR EQUIPO (GLOBAL)
+        elif opcion_admin == "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)":
+            st.write("#### 🛡️ Alta de Categorías en la Plataforma Focus")
+            nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
+            if st.button("🚀 INICIALIZAR Y ACTIVAR EQUIPO", width='stretch'):
+                if nuevo_equipo_nombre:
+                    fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
+                    exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "✨ ¡Bienvenidos a Focus por Accusport!", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
+                    if exito:
+                        st.success(f"¡Excelente! El equipo **{nuevo_equipo_nombre}** ya está oficialmente activo.")
+                        st.balloons()
+
+        # 2. AGREGAR JUGADOR (GRUPAL)
+        elif opcion_admin == "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)":
+            st.write("#### 📝 Registro de Clientes en Directorio")
+            nombre_papa = st.text_input("Nombre Completo del Papá / Acudiente:")
+            nombre_hijo = st.text_input("Nombre Completo del Jugador (Hijo):")
+            df_p_init = obtener_datos_pestana("PARTIDOS")
+            df_u_init = obtener_datos_pestana("USUARIOS")
+            set_eqs = set()
+            if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
+            if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
+            lista_eq_u = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
+            equipo_u = st.selectbox("Asignar al Equipo / Categoría:", lista_eq_u)
+            if st.button("💾 Guardar Cliente", width='stretch'):
+                if nombre_papa and nombre_hijo:
+                    exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
+                    if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado!")
+
+        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
-            
             calendar_id_input = st.text_input("ID o Correo de Google Calendar Destino:", value="primary")
             st.write("---")
             fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
@@ -282,7 +308,7 @@ with tab_admin:
             df_u_init = obtener_datos_pestana("USUARIOS")
             set_eqs = set()
             if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
-            if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
+            if not df_u_init.empty document and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
@@ -307,36 +333,7 @@ with tab_admin:
                 else:
                     st.error("⚠️ Asigna un título al contenido.")
 
-        # 1. INICIALIZAR EQUIPO
-        elif opcion_admin == "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)":
-            st.write("#### 🛡️ Alta de Categorías en la Plataforma Focus")
-            nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
-            if st.button("🚀 INICIALIZAR Y ACTIVAR EQUIPO", width='stretch'):
-                if nuevo_equipo_nombre:
-                    fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
-                    exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "✨ ¡Bienvenidos a Focus por Accusport!", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
-                    if exito:
-                        st.success(f"¡Excelente! El equipo **{nuevo_equipo_nombre}** ya está oficialmente activo.")
-                        st.balloons()
-
-        # 2. AGREGAR JUGADOR
-        elif opcion_admin == "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)":
-            st.write("#### 📝 Registro de Clientes en Directorio")
-            nombre_papa = st.text_input("Nombre Completo del Papá / Acudiente:")
-            nombre_hijo = st.text_input("Nombre Completo del Jugador (Hijo):")
-            df_p_init = obtener_datos_pestana("PARTIDOS")
-            df_u_init = obtener_datos_pestana("USUARIOS")
-            set_eqs = set()
-            if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
-            if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
-            lista_eq_u = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
-            equipo_u = st.selectbox("Asignar al Equipo / Categoría:", lista_eq_u)
-            if st.button("💾 Guardar Cliente", width='stretch'):
-                if nombre_papa and nombre_hijo:
-                    exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
-                    if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado!")
-
-        # 4. REGISTRAR COBRO MENSUAL
+        # 4. REGISTRAR COBRO MENSUAL (VIP)
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
             st.write("#### 💳 Control de Mensualidades de Clubes VIP")
             df_p_init = obtener_datos_pestana("PARTIDOS")
@@ -351,7 +348,7 @@ with tab_admin:
             estado_m = st.selectbox("Estado de Caja:", ["Pagado", "Pendiente"])
             if st.button("💾 Guardar Registro Mensual", width='stretch'):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
-                if exito: st.success(f"💳 Mensualidad de {mes_m} anotada con éxito.")
+                if exito: st.success("💳 Mensualidad anotada con éxito.")
 
         # AUDITAR HOJAS
         elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
