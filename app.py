@@ -14,7 +14,7 @@ CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4"
 
 st.set_page_config(page_title="Focus by Accusport", page_icon="⚽", layout="centered")
 
-# Inicializar estados de sesión
+# 🔒 Inicialización ultra-segura de estados de sesión
 if "admin_autenticado" not in st.session_state:
     st.session_state["admin_autenticado"] = False
 if "nombre_admin" not in st.session_state:
@@ -72,11 +72,12 @@ st.write("---")
 tab_padres, tab_admin = st.tabs(["📅 Calendario para Padres", "🔒 Control Administrativo"])
 
 # =====================================================================
-# SECCIÓN 1: INTERFAZ DE PADRES (CALENDARIO E HISTORIAL DE VIDEOS)
+# SECCIÓN 1: INTERFAZ DE PADRES (MEMORIA PROTEGIDA)
 # =====================================================================
 with tab_padres:
-    if st.session_state["ver_galeria"]:
-        equipo = st.session_state["equipo_activo"]
+    # 🛡️ Uso de .get() para evitar KeyErrors si la sesión se limpia sola
+    if st.session_state.get("ver_galeria", False):
+        equipo = st.session_state.get("equipo_activo", "")
         if st.button("⬅️ Volver a la lista de equipos"):
             st.session_state["ver_galeria"] = False
             st.session_state["equipo_activo"] = ""
@@ -103,7 +104,6 @@ with tab_padres:
                     es_fecha_futura = pd.notnull(row['Fecha_Datetime']) and row['Fecha_Datetime'].date() > datetime.now().date()
                     
                     with st.container(border=True):
-                        # Validación estética de tarjetas
                         if "bienvenidos a focus" in rival.lower():
                             st.markdown(f"✨ **BIENVENIDA OFICIAL A LA CATEGORÍA**")
                         elif es_fecha_futura:
@@ -143,7 +143,6 @@ with tab_padres:
     else:
         st.write("### 🔍 Selecciona tu Categoría")
         
-        # Combinamos los equipos de USUARIOS y PARTIDOS para asegurar cobertura global total
         df_p_init = obtener_datos_pestana("PARTIDOS")
         df_u_init = obtener_datos_pestana("USUARIOS")
         
@@ -166,12 +165,13 @@ with tab_padres:
             st.error("❌ Aún no hay categorías creadas en el sistema. Inicia sesión como administrador para crear el primer equipo.")
 
 # =====================================================================
-# SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BÚNKER)
+# SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO (BLINDADA)
 # =====================================================================
 with tab_admin:
     st.write("### 🔑 Centro de Mando Focus")
     
-    if not st.session_state["admin_autenticado"]:
+    # 🛡️ Uso defensivo de .get() para tumbar los KeyErrors de raíz
+    if not st.session_state.get("admin_autenticado", False):
         usuario_admin = st.text_input("Usuario Operativo:", key="user_adm").strip().lower()
         clave_admin = st.text_input("Contraseña de Seguridad:", type="password", key="pass_adm")
         if st.button("Autenticar Servidor", key="btn_admin_login"):
@@ -184,7 +184,7 @@ with tab_admin:
                 else:
                     st.error("❌ Credenciales inválidas.")
     else:
-        st.success(f"🔓 Consola Activa: Conectado como **{st.session_state['nombre_admin']}**")
+        st.success(f"🔓 Consola Activa: Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
         if st.button("🔒 Cerrar Sesión del Panel"):
             st.session_state["admin_autenticado"] = False
             st.session_state["nombre_admin"] = ""
@@ -192,7 +192,6 @@ with tab_admin:
             
         st.write("---")
         
-        # ERP DE ACCIONES ADMINISTRATIVAS REORDENADO DE GLOBAL A UPSELLING
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
@@ -206,7 +205,7 @@ with tab_admin:
         )
         st.write("---")
         
-        # BALANCE GENERAL
+        # TABLERO DE CONTROL
         if opcion_admin == "📈 Tablero de Control Financiero (Balance)":
             st.write("#### 📊 Balance General de Caja Focus")
             df_p = obtener_datos_pestana("PARTIDOS")
@@ -228,35 +227,30 @@ with tab_admin:
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
             col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP", delta="Activo")
             
-        # 🔥 EL ESLABÓN PERDIDO: 1. INICIALIZAR NUEVO EQUIPO (GLOBAL)
+        # 1. INICIALIZAR EQUIPO
         elif opcion_admin == "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)":
             st.write("#### 🛡️ Alta de Categorías en la Plataforma Focus")
-            st.write("Usa este formulario para crear un equipo desde cero. Esto activará la categoría en los menús de inmediato.")
-            
             nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
             
-            st.write("")
             if st.button("🚀 INICIALIZAR Y ACTIVAR EQUIPO", use_container_width=True):
                 if nuevo_equipo_nombre:
                     fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
-                    # Creamos una fila de bienvenida en la tabla de partidos para inicializar la categoría
                     exito = agregar_fila_excel(
                         "PARTIDOS", 
                         [nuevo_equipo_nombre, fecha_hoy_str, "✨ ¡Bienvenidos a Focus por Accusport!", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0]
                     )
                     if exito:
-                        st.success(f"¡Excelente, Camilo! El equipo **{nuevo_equipo_nombre}** ya está oficialmente activo en internet y listo para recibir jugadores o partidos.")
+                        st.success(f"¡Excelente! El equipo **{nuevo_equipo_nombre}** ya está oficialmente activo.")
                         st.balloons()
                 else:
-                    st.error("⚠️ Debes escribir el nombre del equipo para poder crearlo.")
+                    st.error("⚠️ Escribe el nombre del equipo.")
 
-        # 2. AGREGAR JUGADOR / PAPÁ (GRUPAL)
+        # 2. AGREGAR JUGADOR
         elif opcion_admin == "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)":
             st.write("#### 📝 Registro de Clientes en Directorio")
             nombre_papa = st.text_input("Nombre Completo del Papá / Acudiente:")
             nombre_hijo = st.text_input("Nombre Completo del Jugador (Hijo):")
             
-            # Traemos la lista de equipos creados dinámicamente
             df_p_init = obtener_datos_pestana("PARTIDOS")
             df_u_init = obtener_datos_pestana("USUARIOS")
             set_eqs = set()
@@ -276,10 +270,9 @@ with tab_admin:
                 else:
                     st.error("⚠️ Por favor rellena todos los campos.")
 
-        # 3. REGISTRAR PARTIDO / UPSELLING (OPERATIVO E INDIVIDUAL)
+        # 3. REGISTRAR PARTIDO / UPSELLING
         elif opcion_admin == "⚽ 3. Registrar Partido / Upselling de Goles (OPERATIVO)":
             st.write("#### 📝 Cargar Evento Multimedia (Partido Completo o Reporte Individual)")
-            
             fecha_sel = st.date_input("Fecha del Evento:", datetime.now())
             
             df_p_init = obtener_datos_pestana("PARTIDOS")
@@ -292,11 +285,7 @@ with tab_admin:
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
-            
-            rival_sel = st.text_input(
-                "Título del Video (¡Aquí manejas el Upselling!):", 
-                placeholder="Ej: vs Millonarios FC (Partido Completo) o 📊 Reporte VIP - Matías Barrero"
-            )
+            rival_sel = st.text_input("Título del Video:", placeholder="Ej: vs Millonarios FC (Partido Completo) o 📊 Reporte VIP - Matías Barrero")
             estatus_sel = st.selectbox("Estatus de Publicación:", ["Listo", "Procesando"])
             link_sel = st.text_input("Enlace del Archivo de Video en Google Drive:")
             recaudo_sel = st.number_input("Monto Recaudado por esta Venta ($ COP):", min_value=0, value=0, step=10000)
@@ -311,7 +300,7 @@ with tab_admin:
                 else:
                     st.error("⚠️ Completa el título y el link de Drive.")
 
-        # 4. REGISTRAR COBRO MENSUAL (CLUBES VIP)
+        # 4. REGISTRAR COBRO MENSUAL
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
             st.write("#### 💳 Control de Mensualidades de Clubes VIP")
             df_p_init = obtener_datos_pestana("PARTIDOS")
