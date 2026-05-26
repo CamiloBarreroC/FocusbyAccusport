@@ -234,11 +234,12 @@ with tab_admin:
             
         st.write("---")
         
+        # 🚀 MODIFICADO: Opción 1 renombrada a "Añadir Equipo" perfectamente
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
                 "📈 Tablero de Control Financiero (Balance)",
-                "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)",
+                "🛡️ 1. Añadir Equipo (GLOBAL)",
                 "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)",
                 "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR",
                 "💰 4. Registrar Cobro Mensual (Clubes VIP)",
@@ -269,17 +270,21 @@ with tab_admin:
             col2.metric("💳 Mensualidades Cobradas", f"${total_mensualidades:,.0f} COP")
             col3.metric("🏆 Ingresos Totales Focus", f"${(total_partidos + total_mensualidades):,.0f} COP")
             
-        # 1. INICIALIZAR EQUIPO (GLOBAL)
-        elif opcion_admin == "🛡️ 1. Inicializar Nuevo Equipo / Categoría (GLOBAL)":
-            st.write("#### 🛡️ Alta de Categorías en la Plataforma Focus")
+        # 🚀 1. AÑADIR EQUIPO (GLOBAL) - CAMBIO APLICADO AQUÍ
+        elif opcion_admin == "🛡️ 1. Añadir Equipo (GLOBAL)":
+            st.write("#### 🛡️ Registrar y Activar un Nuevo Equipo en Focus")
+            st.write("Completa el nombre abajo para abrirle su catálogo de streaming y habilitarlo en el sistema.")
+            
             nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
-            if st.button("🚀 INICIALIZAR Y ACTIVAR EQUIPO", width='stretch'):
+            if st.button("🚀 CREAR Y ACTIVAR EQUIPO EN LA RED", width='stretch'):
                 if nuevo_equipo_nombre:
                     fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
                     exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "✨ ¡Bienvenidos a Focus por Accusport!", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
                     if exito:
-                        st.success(f"¡Excelente! El equipo **{nuevo_equipo_nombre}** ya está oficialmente activo.")
+                        st.success(f"¡Golazo! El equipo **{nuevo_equipo_nombre}** ya está oficialmente creado y activo en internet.")
                         st.balloons()
+                else:
+                    st.error("⚠️ Por favor escribe el nombre de la categoría antes de guardarla.")
 
         # 2. AGREGAR JUGADOR (GRUPAL)
         elif opcion_admin == "👤 2. Agregar Jugador / Papá a un Equipo (GRUPAL)":
@@ -298,7 +303,7 @@ with tab_admin:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado con éxito!")
 
-        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO + UPSELLING AUTOMÁTICO 🚀)
+        # 3. PROGRAMAR GRABACIÓN / SUBIR VIDEO (OPERATIVO)
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + GOOGLE CALENDAR":
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             st.write(f"📢 *Sincronización vinculada automáticamente al calendario de Focus:* `{FOCUS_CALENDAR_DEFAULT}`")
@@ -314,8 +319,7 @@ with tab_admin:
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
             
-            # 🔥 AJUSTE ESTRATÉGICO: Rival (Texto Libre) + Formato del Producto (Dropdown cerrado)
-            rival_nombre_libre = st.text_input("Nombre del Rival (Texto Libre):", placeholder="Ej: Millonarios FC, Los de Siempre, Amigos de Fauto")
+            rival_nombre_libre = st.text_input("Nombre del Rival (Texto Libre):", placeholder="Ej: Millonarios FC, Los de Siempre")
             
             producto_formato_cerrado = st.selectbox(
                 "Tipo de Contenido / Producto Focus (Catálogo Comercial):",
@@ -335,7 +339,6 @@ with tab_admin:
             
             if st.button("💾 Procesar y Publicar en la Plataforma", width='stretch'):
                 if rival_nombre_libre:
-                    # Combinamos inteligentemente el texto libre y la opción cerrada para armar el título final
                     titulo_combinado_final = f"vs {rival_nombre_libre} - {producto_formato_cerrado}"
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
                     
@@ -348,7 +351,7 @@ with tab_admin:
                             st.success("📅 Alerta enviada con éxito a tu Google Calendar operativo.")
                         st.balloons()
                 else:
-                    st.error("⚠️ Por favor escribe el nombre del rival para poder procesar la publicación.")
+                    st.error("⚠️ Por favor escribe el nombre del rival.")
 
         # 4. REGISTRAR COBRO MENSUAL (VIP)
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
