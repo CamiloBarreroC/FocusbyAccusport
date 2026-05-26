@@ -161,7 +161,6 @@ with tab_padres:
                                         video_id = link_drive.split("id=")[1].split("&")[0]
                                     if video_id:
                                         embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
-                                        # 🚀 Cambiado a st.iframe nativo de 2026 para tumbar advertencias
                                         st.iframe(embed_url, height=450, scrolling=False)
                                         st.write("")
                                         st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, width='stretch')
@@ -192,6 +191,8 @@ with tab_padres:
                     st.session_state["equipo_activo"] = equipo_seleccionado
                     st.session_state["ver_galeria"] = True
                     st.rerun()
+        else:
+            st.error("❌ Registra un equipo desde el panel de control para activar el ingreso de familias.")
 
 # =====================================================================
 # SECCIÓN 2: INTERFAZ EN VIVO PARA CONTROL ADMINISTRATIVO
@@ -213,6 +214,15 @@ with tab_admin:
                     st.error("❌ Credenciales inválidas.")
     else:
         st.success(f"🔓 Consola Activa: Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
+        
+        # 🚀 UBICACIÓN SUPREMA: El sincronizador de Google Calendar ahora está fijo aquí arriba para todo el Staff
+        with st.expander("🔗 SINCRONIZAR AGENDA CON GOOGLE CALENDAR (CELULAR)", expanded=False):
+            st.write("Ingresa el ID del calendario y dale clic al botón para enlazarlo nativamente a tu dispositivo.")
+            cal_id_fijo = st.text_input("ID del Google Calendar a Vincular:", value="primary", key="cal_fijo_key")
+            if cal_id_fijo:
+                url_sincro_fijo = f"https://calendar.google.com/calendar/render?cid={cal_id_fijo}"
+                st.link_button("💥 VINCULAR ESTE CALENDARIO A MI GOOGLE CALENDAR PERSONAL", url_sincro_fijo, width='stretch')
+        
         if st.button("🔒 Cerrar Sesión del Panel"):
             st.session_state["admin_autenticado"] = False
             st.session_state["nombre_admin"] = ""
@@ -260,13 +270,6 @@ with tab_admin:
             st.write("#### 📝 Control Operativo: Agendar Próximas Filmaciones o Publicar Videos")
             
             calendar_id_input = st.text_input("ID del Google Calendar Destino:", value="primary")
-            
-            # 🚀 NUEVO ENFOQUE: Botón premium para sincronizar el calendario de forma nativa en celulares
-            if calendar_id_input:
-                url_sincro_google = f"https://calendar.google.com/calendar/render?cid={calendar_id_input}"
-                st.link_button("🔗 CONECTAR ESTE CALENDARIO A MI CUENTA DE CELULAR / GOOGLE", url_sincro_google, width='stretch')
-                st.write("")
-                
             st.write("---")
             fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
             
