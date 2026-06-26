@@ -274,17 +274,21 @@ with tab_padres:
                                     video_id = id_match.group(1)
                                 
                                 if video_id:
-                                    embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
+                                    # Enlace de streaming directo para saltar restricciones de cookies
+                                    direct_stream_url = f"https://drive.google.com/uc?export=download&id={video_id}"
+                                    
                                     try:
-                                        st.iframe(embed_url, height=450)
-                                    except AttributeError:
+                                        st.video(direct_stream_url)
+                                    except Exception:
+                                        embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
                                         st.components.v1.iframe(embed_url, height=450, scrolling=False)
+                                        
                                     st.write("")
-                                    st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, width='stretch')
+                                    st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, use_container_width=True)
                                 else:
-                                    st.link_button("📺 ABRIR CARPETA DE VIDEOS EN DRIVE", link_drive, width='stretch')
+                                    st.link_button("📺 ABRIR CARPETA DE VIDEOS EN DRIVE", link_drive, use_container_width=True)
                             elif link_drive:
-                                st.link_button("📺 VER TRANSMISIÓN EN VIVO", link_drive, width='stretch')
+                                st.link_button("📺 VER TRANSMISIÓN EN VIVO", link_drive, use_container_width=True)
                             else:
                                 st.warning("⚠️ No se ha adjuntado un enlace válido para este partido.")
                         else:
@@ -310,7 +314,7 @@ with tab_padres:
         if lista_equipos:
             equipo_seleccionado = st.selectbox("Selecciona tu Equipo / Categoría:", ["-- Elige tu categoría --"] + lista_equipos)
             if equipo_seleccionado != "-- Elige tu categoría --":
-                if st.button("🚀 ENTRAR A MI GALERÍA DE STREAMING", width='stretch'):
+                if st.button("🚀 ENTRAR A MI GALERÍA DE STREAMING", use_container_width=True):
                     st.session_state["equipo_activo"] = equipo_seleccionado
                     st.session_state["ver_galeria"] = True
                     st.rerun()
@@ -342,7 +346,7 @@ with tab_admin:
             st.write("Vincula el calendario corporativo de Focus directamente a las pantallas de tus dispositivos.")
             if FOCUS_CALENDAR_DEFAULT:
                 url_sincro_fijo = f"https://calendar.google.com/calendar/render?cid={FOCUS_CALENDAR_DEFAULT}"
-                st.link_button("💥 VINCULAR ESTE CALENDARIO A MI GOOGLE CALENDAR PERSONAL", url_sincro_fijo, width='stretch')
+                st.link_button("💥 VINCULAR ESTE CALENDARIO A MI GOOGLE CALENDAR PERSONAL", url_sincro_fijo, use_container_width=True)
         
         if st.button("🔒 Cerrar Sesión del Panel"):
             st.session_state["admin_autenticado"] = False
@@ -391,10 +395,9 @@ with tab_admin:
         elif opcion_admin == "🛡️ 1. Añadir Equipo (GLOBAL)":
             st.write("#### 🛡️ Registrar y Activar un Nuevo Equipo en Focus")
             nuevo_equipo_nombre = st.text_input("Nombre Único del Equipo / Categoría:", placeholder="Ej: Fortaleza2017-b").strip()
-            if st.button("🚀 CREAR Y ACTIVAR EQUIPO EN LA RED", width='stretch'):
+            if st.button("🚀 CREAR Y ACTIVAR EQUIPO EN LA RED", use_container_width=True):
                 if nuevo_equipo_nombre:
                     fecha_hoy_str = datetime.now().strftime("%d/%m/%Y")
-                    # El texto por defecto es simplemente "Focus"
                     exito = agregar_fila_excel("PARTIDOS", [nuevo_equipo_nombre, fecha_hoy_str, "Focus", "Listo", "https://drive.google.com/file/d/1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4/preview", 0])
                     if exito:
                         st.success(f"¡Golazo! El equipo **{nuevo_equipo_nombre}** ya está oficialmente creado y activo en internet.")
@@ -414,7 +417,7 @@ with tab_admin:
             if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq_u = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             equipo_u = st.selectbox("Asignar al Equipo / Categoría:", lista_eq_u)
-            if st.button("💾 Guardar Cliente", width='stretch'):
+            if st.button("💾 Guardar Cliente", use_container_width=True):
                 if nombre_papa and nombre_hijo:
                     exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito: st.success(f"👤 ¡Jugador {nombre_hijo} guardado con éxito!")
@@ -453,7 +456,7 @@ with tab_admin:
             
             sincronizar_google = st.checkbox("⚡ ¿Replicar y agendar este partido en los Google Calendars automáticamente?", value=True)
             
-            if st.button("💾 Procesar y Publicar en la Plataforma", width='stretch'):
+            if st.button("💾 Procesar y Publicar en la Plataforma", use_container_width=True):
                 if rival_nombre_libre:
                     titulo_combinado_final = f"{rival_nombre_libre} - {producto_formato_cerrado}"
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
@@ -482,7 +485,7 @@ with tab_admin:
             mes_m = st.selectbox("Mes Cobrado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
             monto_m = st.number_input("Monto de la Mensualidad ($ COP):", min_value=0, value=350000, step=50000)
             estado_m = st.selectbox("Estado de Caja:", ["Pagado", "Pendiente"])
-            if st.button("💾 Guardar Registro Mensual", width='stretch'):
+            if st.button("💾 Guardar Registro Mensual", use_container_width=True):
                 exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, estado_m])
                 if exito: st.success("💳 Mensualidad anotada con éxito en la tesorería.")
 
