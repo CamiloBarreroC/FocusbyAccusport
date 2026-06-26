@@ -445,7 +445,7 @@ with tab_admin:
             df_u_init = obtener_datos_pestana("USUARIOS")
             set_eqs = set()
             if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
-            if not df_u_init.empty upgrade and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
+            if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
             
