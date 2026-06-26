@@ -274,14 +274,25 @@ with tab_padres:
                                     video_id = id_match.group(1)
                                 
                                 if video_id:
-                                    # Enlace de streaming directo para saltar restricciones de cookies
-                                    direct_stream_url = f"https://drive.google.com/uc?export=download&id={video_id}"
+                                    embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
                                     
-                                    try:
-                                        st.video(direct_stream_url)
-                                    except Exception:
-                                        embed_url = f"https://drive.google.com/file/d/{video_id}/preview"
-                                        st.components.v1.iframe(embed_url, height=450, scrolling=False)
+                                    # Sub-pestañas tácticas para asegurar visualización sin importar el peso del archivo
+                                    tab_ver, tab_soporte = st.tabs(["📺 Reproductor Focus", "🚨 ¿Problemas para reproducir?"])
+                                    
+                                    with tab_ver:
+                                        # Cargamos el preview oficial en Iframe ideal para videos de más de 100MB
+                                        st.components.v1.iframe(embed_url, height=480, scrolling=False)
+                                    
+                                    with tab_soporte:
+                                        st.markdown("""
+                                        ### 🛠️ Guía rápida de visualización
+                                        Si la pantalla del reproductor se queda en negro, en blanco o te solicita iniciar sesión, se debe a los bloqueos de privacidad automáticos de tu navegador.
+                                        
+                                        **¿Cómo solucionarlo en un paso?**
+                                        1. **Descarga el partido:** Haz clic en el botón naranja inferior de **Descargar Video Original** para guardarlo directamente en tu dispositivo en HD.
+                                        2. **Navegador recomendado:** Utiliza preferiblemente **Google Chrome** o **Microsoft Edge** (Safari en iPhone y Brave suelen bloquear los reproductores en la nube por defecto).
+                                        3. **Evita el modo incógnito:** Las ventanas privadas deshabilitan de raíz las cookies que usa Google Drive para renderizar contenido.
+                                        """)
                                         
                                     st.write("")
                                     st.link_button("📥 DESCARGAR VIDEO ORIGINAL (HD)", link_drive, use_container_width=True)
@@ -434,7 +445,7 @@ with tab_admin:
             df_u_init = obtener_datos_pestana("USUARIOS")
             set_eqs = set()
             if not df_p_init.empty and "Equipo" in df_p_init.columns: set_eqs.update(df_p_init["Equipo"].unique())
-            if not df_u_init.empty and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
+            if not df_u_init.empty upgrade and "Equipo" in df_u_init.columns: set_eqs.update(df_u_init["Equipo"].unique())
             lista_eq = sorted([e for e in set_eqs if e]) if set_eqs else ["Fortaleza2017-b"]
             equipo_sel = st.selectbox("Categoría / Equipo Destino:", lista_eq)
             
