@@ -9,6 +9,11 @@ import gspread
 import pandas as pd
 import streamlit as st
 
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
+
 # =====================================================================
 # 📝 CONFIGURACIÓN INICIAL Y CENTRAL DE BRANDING
 # =====================================================================
@@ -76,7 +81,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Inicialización segura de variables de sesión
 for key, default in [
     ("admin_autenticado", False),
     ("nombre_admin", ""),
@@ -185,37 +189,116 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 
 
 # =====================================================================
-# 📑 PROCESAMIENTO CSV Y GENERADOR DE REPORTE PDF (6 PÁGINAS)
+# 📑 SANITIZADOR UNICODE Y GENERADOR DE REPORTE PDF
 # =====================================================================
-def procesar_csv_tagueo(file_csv):
-    """Procesa el CSV exportado por el software de tagueo."""
-    try:
-        df = pd.read_csv(file_csv)
-        datos = {}
-        for _, row in df.iterrows():
-            clave = str(row.iloc[0]).strip().lower()
-            val_local = row.iloc[1] if len(row) > 1 else 0
-            val_visita = row.iloc[2] if len(row) > 2 else 0
+def sanitizar_texto(texto):
+    """Limpia caracteres fuera del mapa Latin-1 para evitar que FPDF colapse."""
+    if not isinstance(texto, str):
+        return str(texto)
+    reemplazos = {
+        "•": "-", "✔": "[OK]", "✖": "[X]", "🎯": ">", "⚽": "", "🎥": "",
+        "⚡": "", "🚀": "", "📥": "", "📊": "", "🛡️": "", "👤": "", "📆": "",
+        "💰": "", "👁️": "", "🔑": "", "⚙️": "", "🚨": "", "🛠️": "", "👋": "",
+        "✅": "", "⏳": "", "✨": "", "💥": "", "🏆": "", "💵": "", "💳": ""
+    }
+    for origen, destino in reemplazos.items():
+        texto = texto.replace(origen, destino)
+    return texto.encode("latin-1", "ignore").decode("latin-1")
 
-            if "possession" in clave:
-                datos["pos_local"] = str(val_local)
-                datos["pos_visita"] = str(val_visita)
-            elif "shots" in clave and "target" not in clave:
-                datos["remates_local"] = val_local
-                datos["remates_visita"] = val_visita
-            elif "goals" in clave:
-                datos["goles_local"] = val_local
-                datos["goles_visita"] = val_visita
-            elif "passes" in clave and "successful" not in clave:
-                datos["pases_local"] = val_local
-                datos["pases_visita"] = val_visita
-            elif "successful passes" in clave:
-                datos["pases_exitosos_local"] = val_local
-                datos["pases_exitosos_visita"] = val_visita
 
-        return datos
-    except Exception:
+def procesar_archivo_tagueo(file_obj):
+    if file_obj is None:
         return {}
+
+    nombre_archivo = file_obj.name.lower()
+    datos = {}
+
+    if nombre_archivo.endswith(".csv"):
+        try:
+            df = pd.read_csv(file_obj)
+            for _, row in df.iterrows():
+                clave = str(row.iloc[0]).strip().lower()
+                val_local = row.iloc[1] if len(row) > 1 else 0
+                val_visita = row.iloc[2] if len(row) > 2 else 0
+
+                if "possession" in clave:
+                    datos["pos_local"] = str(val_local)
+                    datos["pos_visita"] = str(val_visita)
+                elif "shots" in clave and "target" not in clave:
+                    datos["remates_local"] = val_local
+                    datos["remates_visita"] = val_visita
+                elif "goals" in clave:
+                    datos["goles_local"] = val_local
+                    datos["goles_visita"] = val_visita
+                elif "passes" in clave and "successful" not in clave:
+                    datos["pases_local"] = val_local
+                    datos["pases_visita"] = val_visita
+                elif "successful passes" in clave:
+                    datos["pases_exitosos_local"] = val_local
+                    datos["pases_exitosos_visita"] = val_visita
+        except Exception as e:
+            st.error(f"Error procesando CSV: {e}")
+
+    elif nombre_archivo.endswith(".pdf"):
+        if pdfplumber is None:
+            st.warning("⚠️ La librería pdfplumber no está instalada en requirements.txt para procesar PDFs.")
+            return datos
+
+        try:
+            with pdfplumber.open(file_obj) as pdf:
+                texto_completo = "\n".join(
+                    [p.extract_text() or "" for p in pdf.pages]
+                )
+
+                pos_m = re.search(
+                    r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)",
+                    texto_completo,
+                    re.IGNORECASE,
+                )
+                if pos_m:
+                    datos["pos_local"] = pos_m.group(1)
+                    datos["pos_visita"] = pos_m.group(2)
+
+                goles_m = re.search(
+                    r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)",
+                    texto_completo,
+                    re.IGNORECASE,
+                )
+                if goles_m:
+                    datos["goles_local"] = int(goles_m.group(1))
+                    datos["goles_visita"] = int(goles_m.group(2))
+
+                shots_m = re.search(
+                    r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)",
+                    texto_completo,
+                    re.IGNORECASE,
+                )
+                if shots_m:
+                    datos["remates_local"] = int(shots_m.group(1))
+                    datos["remates_visita"] = int(shots_m.group(2))
+
+                pases_m = re.search(
+                    r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
+                    texto_completo,
+                    re.IGNORECASE,
+                )
+                if pases_m:
+                    datos["pases_local"] = int(pases_m.group(1))
+                    datos["pases_visita"] = int(pases_m.group(2))
+
+                sp_m = re.search(
+                    r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
+                    texto_completo,
+                    re.IGNORECASE,
+                )
+                if sp_m:
+                    datos["pases_exitosos_local"] = int(sp_m.group(1))
+                    datos["pases_exitosos_visita"] = int(sp_m.group(2))
+
+        except Exception as e:
+            st.error(f"Error al extraer datos del PDF: {e}")
+
+    return datos
 
 
 class PDFReporteFocus(FPDF):
@@ -243,9 +326,11 @@ def generar_pdf_6_paginas(data):
     GRAY_BG = (245, 245, 247)
     TEXT_DARK = (30, 30, 30)
 
-    # -----------------------------------------------------------------
+    eq_loc = sanitizar_texto(data['equipo_local'])
+    eq_vis = sanitizar_texto(data['equipo_visita'])
+    fec_str = sanitizar_texto(data['fecha'])
+
     # PÁGINA 1: PORTADA
-    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_fill_color(*DARK)
     pdf.rect(0, 0, 210, 297, "F")
@@ -269,14 +354,14 @@ def generar_pdf_6_paginas(data):
     pdf.cell(
         0,
         12,
-        f"{data['equipo_local'].upper()} {data['goles_local']} - {data['goles_visita']} {data['equipo_visita'].upper()}",
+        f"{eq_loc.upper()} {data['goles_local']} - {data['goles_visita']} {eq_vis.upper()}",
         ln=True,
         align="C",
     )
 
     pdf.set_font("Helvetica", "", 12)
     pdf.set_text_color(180, 180, 180)
-    pdf.cell(0, 8, f"{data['fecha']}", ln=True, align="C")
+    pdf.cell(0, 8, f"{fec_str}", ln=True, align="C")
 
     pdf.set_y(240)
     pdf.set_font("Helvetica", "I", 9)
@@ -289,9 +374,7 @@ def generar_pdf_6_paginas(data):
     )
     pdf.cell(0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C")
 
-    # -----------------------------------------------------------------
     # PÁGINA 2: ANÁLISIS GENERAL
-    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -302,7 +385,7 @@ def generar_pdf_6_paginas(data):
     pdf.cell(
         0,
         6,
-        f"{data['equipo_local']} vs {data['equipo_visita']} - {data['fecha']}",
+        f"{eq_loc} vs {eq_vis} - {fec_str}",
         ln=True,
     )
     pdf.ln(5)
@@ -314,7 +397,7 @@ def generar_pdf_6_paginas(data):
     pdf.cell(
         0,
         15,
-        f"{data['equipo_local']}  {data['goles_local']} - {data['goles_visita']}  {data['equipo_visita']}",
+        f"{eq_loc}  {data['goles_local']} - {data['goles_visita']}  {eq_vis}",
         ln=True,
         align="C",
     )
@@ -323,18 +406,16 @@ def generar_pdf_6_paginas(data):
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Lectura general:", ln=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(0, 5, data.get("lectura_general", "Sin datos registrados."))
+    pdf.multi_cell(0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos registrados.")))
     pdf.ln(8)
 
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Tres conclusiones rápidas:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for conc in data.get("conclusiones", []):
-        pdf.cell(0, 6, f"• {conc}", ln=True)
+        pdf.cell(0, 6, f"- {sanitizar_texto(conc)}", ln=True)
 
-    # -----------------------------------------------------------------
     # PÁGINA 3: COMPARATIVO GENERAL
-    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -348,8 +429,8 @@ def generar_pdf_6_paginas(data):
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(*WHITE)
     pdf.cell(90, 8, " Variable", 1, 0, "L", fill=True)
-    pdf.cell(50, 8, f" {data['equipo_local']}", 1, 0, "C", fill=True)
-    pdf.cell(50, 8, f" {data['equipo_visita']}", 1, 1, "C", fill=True)
+    pdf.cell(50, 8, f" {eq_loc}", 1, 0, "C", fill=True)
+    pdf.cell(50, 8, f" {eq_vis}", 1, 1, "C", fill=True)
 
     stats_tabla = [
         ("Posesión (%)", data.get("pos_local", "45%"), data.get("pos_visita", "55%")),
@@ -362,13 +443,11 @@ def generar_pdf_6_paginas(data):
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*TEXT_DARK)
     for var, v1, v2 in stats_tabla:
-        pdf.cell(90, 7, f" {var}", 1, 0, "L")
-        pdf.cell(50, 7, f" {v1}", 1, 0, "C")
-        pdf.cell(50, 7, f" {v2}", 1, 1, "C")
+        pdf.cell(90, 7, f" {sanitizar_texto(var)}", 1, 0, "L")
+        pdf.cell(50, 7, f" {sanitizar_texto(v1)}", 1, 0, "C")
+        pdf.cell(50, 7, f" {sanitizar_texto(v2)}", 1, 1, "C")
 
-    # -----------------------------------------------------------------
     # PÁGINA 4: ATAQUE Y DEFINICIÓN (SHOT CHART)
-    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -387,9 +466,7 @@ def generar_pdf_6_paginas(data):
     else:
         pdf.cell(0, 10, "[Mapa de remates no adjuntado]", ln=True)
 
-    # -----------------------------------------------------------------
     # PÁGINA 5: POSESIÓN Y PASE
-    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -405,25 +482,23 @@ def generar_pdf_6_paginas(data):
     pdf.cell(
         0,
         6,
-        "• Tercio Defensivo: 55% precisión (29 intentos / 16 exitosos)",
+        "- Tercio Defensivo: 55% precisión (29 intentos / 16 exitosos)",
         ln=True,
     )
     pdf.cell(
         0,
         6,
-        "• Tercio Medio: 80% precisión (30 intentos / 24 exitosos)",
+        "- Tercio Medio: 80% precisión (30 intentos / 24 exitosos)",
         ln=True,
     )
     pdf.cell(
         0,
         6,
-        "• Tercio Ofensivo: 50% precisión (28 intentos / 14 exitosos)",
+        "- Tercio Ofensivo: 50% precisión (28 intentos / 14 exitosos)",
         ln=True,
     )
 
-    # -----------------------------------------------------------------
     # PÁGINA 6: CONCLUSIONES Y FOCOS DE TRABAJO
-    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -437,21 +512,21 @@ def generar_pdf_6_paginas(data):
     pdf.cell(0, 8, "Aspectos a conservar:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_conservar", []):
-        pdf.cell(0, 6, f"✔ {asp}", ln=True)
+        pdf.cell(0, 6, f"[OK] {sanitizar_texto(asp)}", ln=True)
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Aspectos a corregir:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_corregir", []):
-        pdf.cell(0, 6, f"✖ {asp}", ln=True)
+        pdf.cell(0, 6, f"[X] {sanitizar_texto(asp)}", ln=True)
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Focos sugeridos para entrenamiento:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for foc in data.get("focos_entrenamiento", []):
-        pdf.cell(0, 6, f"🎯 {foc}", ln=True)
+        pdf.cell(0, 6, f"> {sanitizar_texto(foc)}", ln=True)
 
     return bytes(pdf.output())
 
@@ -506,7 +581,7 @@ with tab_padres:
                     with st.container(border=True):
                         st.markdown(f"## 🆚 {rival}")
                         st.markdown(f"📅 **Fecha:** {fecha_str}")
-                        if link_drive and "drive.google.com" in link_drive:
+                        if link_drive and "http" in link_drive:
                             st.link_button(
                                 "📥 VER / DESCARGAR REPORTE Y VIDEO",
                                 link_drive,
@@ -577,7 +652,7 @@ with tab_admin:
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
-                "📄 Generar Reporte de Análisis PDF (Tagueo CSV)",
+                "📄 Generar Reporte de Análisis PDF (Tagueo CSV / PDF)",
                 "📈 Tablero de Control Financiero (Balance)",
                 "🛡️ 1. Añadir Equipo (GLOBAL)",
                 "👤 2. Agregar Jugador / Papá a un Equipo",
@@ -588,14 +663,13 @@ with tab_admin:
         )
         st.write("---")
 
-        # 📄 GENERADOR PDF DE TAGUEO (MOTOR PDF)
-        if opcion_admin == "📄 Generar Reporte de Análisis PDF (Tagueo CSV)":
+        if opcion_admin == "📄 Generar Reporte de Análisis PDF (Tagueo CSV / PDF)":
             st.write("#### 📊 Generador de Reportes de 6 Páginas Focus")
 
-            col_csv, col_img = st.columns(2)
-            with col_csv:
-                archivo_csv = st.file_uploader(
-                    "1. Archivo CSV de Tagueo:", type=["csv"]
+            col_doc, col_img = st.columns(2)
+            with col_doc:
+                archivo_tagueo = st.file_uploader(
+                    "1. Archivo de Tagueo (PDF o CSV):", type=["csv", "pdf"]
                 )
             with col_img:
                 archivo_img = st.file_uploader(
@@ -649,8 +723,8 @@ with tab_admin:
             )
 
             if st.button("🚀 GENERAR Y DESCARGAR PDF DE 6 PÁGINAS", use_container_width=True):
-                datos_csv = (
-                    procesar_csv_tagueo(archivo_csv) if archivo_csv else {}
+                datos_extraidos = (
+                    procesar_archivo_tagueo(archivo_tagueo) if archivo_tagueo else {}
                 )
 
                 data_pdf = {
@@ -671,7 +745,7 @@ with tab_admin:
                         x.strip() for x in foc_ent.split(",") if x.strip()
                     ],
                     "img_shot_chart": archivo_img,
-                    **datos_csv,
+                    **datos_extraidos,
                 }
 
                 pdf_bytes = generar_pdf_6_paginas(data_pdf)
@@ -716,7 +790,7 @@ with tab_admin:
             fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
             equipo_sel = st.text_input("Categoría / Equipo Destino:", value="Fortaleza 2017 B")
             rival_sel = st.text_input("Nombre del Rival:")
-            link_sel = st.text_input("Enlace Google Drive:")
+            link_sel = st.text_input("Enlace Google Drive del Video / Reporte PDF:")
             if st.button("💾 Publicar Partido", use_container_width=True):
                 if rival_sel:
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
