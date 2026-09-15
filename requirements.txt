@@ -2,3 +2,4 @@ streamlit
 gspread
 pandas
 google-api-python-client
+pip install fpdf2
