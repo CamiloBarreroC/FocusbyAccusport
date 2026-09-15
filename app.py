@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta
 import json
 import re
+from datetime import datetime, timedelta
 
 from fpdf import FPDF
 from google.oauth2.service_account import Credentials
@@ -20,7 +20,7 @@ st.set_page_config(
     page_title="Focus by Accusport", page_icon="⚽", layout="centered"
 )
 
-# 🎨 ESTILOS CSS BLACK & ORANGE CYBER-TECH
+# 🎨 INYECCIÓN DE ESTILOS CSS BLACK & ORANGE CYBER-TECH
 st.markdown(
     """
     <style>
@@ -76,7 +76,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Inicialización de estado de sesión
+# Inicialización segura de variables de sesión
 for key, default in [
     ("admin_autenticado", False),
     ("nombre_admin", ""),
@@ -88,7 +88,7 @@ for key, default in [
 
 
 # =====================================================================
-# 🔗 SERVICIOS Y CONEXIONES (GOOGLE SHEETS & CALENDAR)
+# 🔗 CONEXIONES Y SERVICIOS (GOOGLE SHEETS Y CALENDAR)
 # =====================================================================
 @st.cache_resource
 def conectar_google_services():
@@ -185,14 +185,13 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 
 
 # =====================================================================
-# 📑 MOTOR DE PROCESAMIENTO CSV Y GENERADOR DE PDF (6 PÁGINAS)
+# 📑 PROCESAMIENTO CSV Y GENERADOR DE REPORTE PDF (6 PÁGINAS)
 # =====================================================================
 def procesar_csv_tagueo(file_csv):
-    """Extrae métricas desde el archivo CSV proveniente del software de tagueo."""
+    """Procesa el CSV exportado por el software de tagueo."""
     try:
         df = pd.read_csv(file_csv)
         datos = {}
-        # Mapeo flexible buscando coincidencias de variables en el dataframe
         for _, row in df.iterrows():
             clave = str(row.iloc[0]).strip().lower()
             val_local = row.iloc[1] if len(row) > 1 else 0
@@ -308,7 +307,6 @@ def generar_pdf_6_paginas(data):
     )
     pdf.ln(5)
 
-    # Marcador Box
     pdf.set_fill_color(*GRAY_BG)
     pdf.rect(10, pdf.get_y(), 190, 25, "F")
     pdf.set_font("Helvetica", "B", 18)
@@ -322,14 +320,12 @@ def generar_pdf_6_paginas(data):
     )
     pdf.ln(15)
 
-    # Lectura general
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Lectura general:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.multi_cell(0, 5, data.get("lectura_general", "Sin datos registrados."))
     pdf.ln(8)
 
-    # 3 Conclusiones rápidas
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Tres conclusiones rápidas:", ln=True)
     pdf.set_font("Helvetica", "", 10)
@@ -348,7 +344,6 @@ def generar_pdf_6_paginas(data):
     pdf.cell(0, 6, "Volumen, posesión y acciones de partido", ln=True)
     pdf.ln(5)
 
-    # Tabla Estadísticas
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(*WHITE)
@@ -372,7 +367,7 @@ def generar_pdf_6_paginas(data):
         pdf.cell(50, 7, f" {v2}", 1, 1, "C")
 
     # -----------------------------------------------------------------
-    # PÁGINA 4: ATAQUE Y DEFINICIÓN (INCLUYE SHOT CHART SI EXISTE)
+    # PÁGINA 4: ATAQUE Y DEFINICIÓN (SHOT CHART)
     # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
@@ -388,7 +383,7 @@ def generar_pdf_6_paginas(data):
             pdf.image(data["img_shot_chart"], x=20, y=50, w=170)
             pdf.set_y(180)
         except Exception:
-            pdf.cell(0, 10, "[Error al cargar imagen del Shot Chart]", ln=True)
+            pdf.cell(0, 10, "[Error al renderizar imagen del Shot Chart]", ln=True)
     else:
         pdf.cell(0, 10, "[Mapa de remates no adjuntado]", ln=True)
 
@@ -462,7 +457,7 @@ def generar_pdf_6_paginas(data):
 
 
 # =====================================================================
-# 📐 CABECERA DE MARCA
+# 📐 LOGO Y CABECERA
 # =====================================================================
 _, col_logo_center, _ = st.columns([1, 4, 1])
 with col_logo_center:
@@ -587,12 +582,13 @@ with tab_admin:
                 "🛡️ 1. Añadir Equipo (GLOBAL)",
                 "👤 2. Agregar Jugador / Papá a un Equipo",
                 "📆 3. Programar Grabación / Subir Video + CALENDAR",
+                "💰 4. Registrar Cobro Mensual (Clubes VIP)",
                 "👁️ Auditar Hojas de Excel en Vivo",
             ],
         )
         st.write("---")
 
-        # 📄 GENERADOR PDF DE TAGUEO (NUEVO MOTOR)
+        # 📄 GENERADOR PDF DE TAGUEO (MOTOR PDF)
         if opcion_admin == "📄 Generar Reporte de Análisis PDF (Tagueo CSV)":
             st.write("#### 📊 Generador de Reportes de 6 Páginas Focus")
 
@@ -690,17 +686,58 @@ with tab_admin:
         elif opcion_admin == "🛡️ 1. Añadir Equipo (GLOBAL)":
             nuevo_equipo = st.text_input("Nombre Único del Equipo:")
             if st.button("🚀 CREAR EQUIPO") and nuevo_equipo:
-                agregar_fila_excel(
+                exito = agregar_fila_excel(
                     "PARTIDOS",
                     [
                         nuevo_equipo,
                         datetime.now().strftime("%d/%m/%Y"),
                         "Bienvenida",
-                        "Listo",,
+                        "Listo",
+                        "https://drive.google.com",
                         0,
                     ],
                 )
-                st.success(f"Equipo {nuevo_equipo} creado.")
+                if exito:
+                    st.success(f"Equipo {nuevo_equipo} creado con éxito.")
+
+        elif opcion_admin == "👤 2. Agregar Jugador / Papá a un Equipo":
+            nombre_papa = st.text_input("Nombre Completo del Papá / Acudiente:")
+            nombre_hijo = st.text_input("Nombre Completo del Jugador (Hijo):")
+            equipo_u = st.text_input("Categoría / Equipo:")
+            if st.button("💾 Guardar Cliente", use_container_width=True):
+                if nombre_papa and nombre_hijo:
+                    exito = agregar_fila_excel(
+                        "USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u]
+                    )
+                    if exito:
+                        st.success(f"👤 Jugador {nombre_hijo} guardado con éxito.")
+
+        elif opcion_admin == "📆 3. Programar Grabación / Subir Video + CALENDAR":
+            fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
+            equipo_sel = st.text_input("Categoría / Equipo Destino:", value="Fortaleza 2017 B")
+            rival_sel = st.text_input("Nombre del Rival:")
+            link_sel = st.text_input("Enlace Google Drive:")
+            if st.button("💾 Publicar Partido", use_container_width=True):
+                if rival_sel:
+                    fecha_str = fecha_sel.strftime("%d/%m/%Y")
+                    exito = agregar_fila_excel(
+                        "PARTIDOS",
+                        [equipo_sel, fecha_str, rival_sel, "Listo", link_sel, 0],
+                    )
+                    if exito:
+                        crear_evento_google_calendar(
+                            FOCUS_CALENDAR_DEFAULT, rival_sel, fecha_sel, equipo_sel
+                        )
+                        st.success("✅ Guardado y agendado en Google Calendar.")
+
+        elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
+            equipo_m = st.text_input("Equipo:")
+            mes_m = st.selectbox("Mes Cobrado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
+            monto_m = st.number_input("Monto ($ COP):", value=350000)
+            if st.button("💾 Guardar Cobro", use_container_width=True):
+                exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, "Pagado"])
+                if exito:
+                    st.success("💳 Registrado en tesorería.")
 
         elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
             tabla_sel = st.radio(
@@ -710,7 +747,7 @@ with tab_admin:
             st.dataframe(df_audit, use_container_width=True)
 
 # =====================================================================
-# 🦶 PIE DE PÁGINA
+# 🦶 FOOTER BRANDING
 # =====================================================================
 st.write("---")
 st.markdown(
