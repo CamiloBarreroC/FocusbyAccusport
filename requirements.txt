@@ -1,5 +1,6 @@
 streamlit
-gspread
 pandas
+gspread
+google-auth
 google-api-python-client
-pip install fpdf2
+fpdf2
