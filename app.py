@@ -92,13 +92,14 @@ defaults = {
     "nombre_admin": "",
     "ver_galeria": False,
     "equipo_activo": "",
-    "lectura_gen": "Fortaleza 2017 B ganó 5-2 combinando dos rasgos decisivos: alta eficiencia ofensiva y solidez defensiva.",
-    "conc_1": "La diferencia del partido estuvo más asociada a la eficacia que al volumen.",
-    "conc_2": "El mejor registro de pase apareció en el tercio medio: 80% de precisión.",
-    "conc_3": "La estructura defensiva limitó al rival a solo 2 goles en 34 remates.",
-    "asp_cons": "Definición eficiente, Inicio de partido arrollador, Defensa y marca sólida",
-    "asp_corr": "Control del volumen rival, Salida bajo presión, Conexión en último tercio",
-    "foc_ent": "Sostener el bloque defensivo, Salida y progresión rápida, Conexión en último tercio",
+    "lectura_gen": "",
+    "conc_1": "",
+    "conc_2": "",
+    "conc_3": "",
+    "asp_cons": "",
+    "asp_corr": "",
+    "foc_ent": "",
+    "stats_partido": {},
 }
 
 for key, val in defaults.items():
@@ -204,63 +205,54 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 
 
 # =====================================================================
-# 📊 GENERADOR NATIVO DE RADAR CHARTS CYBER-TECH (MATPLOTLIB)
+# 📊 GENERADOR NATIVO DE RADAR CHARTS CYBER-TECH
 # =====================================================================
 def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
-    """Genera un gráfico de telaraña comparativo con temática neón Cyber-Tech.
+    """Genera un gráfico de telaraña comparativo con temática neón Cyber-Tech balanceado."""
+    categorias = [
+        "Eficacia Gol",
+        "Posesión %",
+        "Precisión Pase",
+        "Volumen Remates",
+    ]
 
-    Adapta dinámicamente sus ejes si existen o no métricas defensivas.
-    """
-    tiene_defensa = any(
-        k in datos
-        for k in [
-            "recuperaciones_local",
-            "duelos_def_local",
-            "intercepciones_local",
-        ]
-    )
+    try:
+        g_loc = float(datos.get("goles_local", 0))
+        g_vis = float(datos.get("goles_visita", 0))
+        rem_loc = float(datos.get("remates_local", 1))
+        rem_vis = float(datos.get("remates_visita", 1))
 
-    if tiene_defensa:
-        categorias = [
-            "Eficacia",
-            "Posesión",
-            "Pases Exitosos",
-            "Volumen Remates",
-            "Acciones Defensivas",
-        ]
-        val_loc = [
-            min(100, int(datos.get("goles_local", 0)) * 20),
-            float(str(datos.get("pos_local", "50")).replace("%", "") or 50),
-            min(100, int(datos.get("pases_exitosos_local", 50)) / 1.5),
-            min(100, int(datos.get("remates_local", 10)) * 4),
-            min(100, int(datos.get("recuperaciones_local", 15)) * 3),
-        ]
-        val_vis = [
-            min(100, int(datos.get("goles_visita", 0)) * 20),
-            float(str(datos.get("pos_visita", "50")).replace("%", "") or 50),
-            min(100, int(datos.get("pases_exitosos_visita", 50)) / 1.5),
-            min(100, int(datos.get("remates_visita", 10)) * 4),
-            min(100, int(datos.get("recuperaciones_visita", 15)) * 3),
-        ]
-    else:
-        categorias = [
-            "Eficacia Gol",
-            "Posesión %",
-            "Precisión Pase",
-            "Volumen Remates",
-        ]
-        val_loc = [
-            min(100, int(datos.get("goles_local", 0)) * 20),
-            float(str(datos.get("pos_local", "45")).replace("%", "") or 45),
-            60.0,
-            min(100, int(datos.get("remates_local", 20)) * 3),
-        ]
-        val_vis = [
-            min(100, int(datos.get("goles_visita", 0)) * 20),
-            float(str(datos.get("pos_visita", "55")).replace("%", "") or 55),
-            70.0,
-            min(100, int(datos.get("remates_visita", 34)) * 2),
-        ]
+        ef_loc = min(100.0, (g_loc / max(1.0, rem_loc)) * 200.0)
+        ef_vis = min(100.0, (g_vis / max(1.0, rem_vis)) * 200.0)
+
+        pos_l = float(
+            str(datos.get("pos_local", "50")).replace("%", "").strip() or 50
+        )
+        pos_v = float(
+            str(datos.get("pos_visita", "50")).replace("%", "").strip() or 50
+        )
+
+        prec_l = float(
+            str(datos.get("precision_pase_local", "60"))
+            .replace("%", "")
+            .strip()
+            or 60
+        )
+        prec_v = float(
+            str(datos.get("precision_pase_visita", "60"))
+            .replace("%", "")
+            .strip()
+            or 60
+        )
+
+        vol_l = min(100.0, rem_loc * 2.5)
+        vol_v = min(100.0, rem_vis * 2.5)
+
+        val_loc = [ef_loc, pos_l, prec_l, vol_l]
+        val_vis = [ef_vis, pos_v, prec_v, vol_v]
+    except Exception:
+        val_loc = [50, 50, 60, 50]
+        val_vis = [40, 50, 65, 60]
 
     N = len(categorias)
     angulos = [n / float(N) * 2 * np.pi for n in range(N)]
@@ -269,35 +261,22 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     val_loc += val_loc[:1]
     val_vis += val_vis[:1]
 
-    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    fig, ax = plt.subplots(figsize=(5.5, 5.5), subplot_kw=dict(polar=True))
     fig.patch.set_facecolor("#0D0D0D")
     ax.set_facecolor("#0D0D0D")
 
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
 
-    plt.xticks(
-        angulos[:-1],
-        categorias,
-        color="#FFFFFF",
-        size=9,
-        weight="bold",
-    )
-
+    plt.xticks(angulos[:-1], categorias, color="#FFFFFF", size=9, weight="bold")
     ax.set_rlabel_position(0)
-    plt.yticks(
-        [25, 50, 75, 100],
-        ["", "", "", ""],
-        color="#333333",
-        size=7,
-    )
+    plt.yticks([25, 50, 75, 100], ["", "", "", ""], color="#333333", size=7)
     plt.ylim(0, 100)
 
     ax.spines["polar"].set_color("#FF5500")
     ax.spines["polar"].set_linewidth(1.5)
     ax.grid(color="#222222", linestyle="--", linewidth=0.8)
 
-    # Trazado Equipo Local (Naranja Neón)
     ax.plot(
         angulos,
         val_loc,
@@ -308,7 +287,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_loc, color="#FF5500", alpha=0.35)
 
-    # Trazado Equipo Visitante (Gris Plata)
     ax.plot(
         angulos,
         val_vis,
@@ -341,9 +319,12 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
 
 
 # =====================================================================
-# 🤖 MOTOR GEMINI IA ADAPTATIVO
+# 🤖 MOTOR GEMINI IA MULTIMODAL Y ANALIZADOR DE TEXTO COMPLETO
 # =====================================================================
-def generar_analisis_tactico_gemini(datos_extraidos, equipo_local, equipo_visita):
+def generar_analisis_tactico_gemini(
+    texto_partido, equipo_local, equipo_visita
+):
+    """Procesa el texto crudo del tagueo extraído del PDF con Gemini para extraer datos y redacción."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
             st.error(
@@ -354,35 +335,37 @@ def generar_analisis_tactico_gemini(datos_extraidos, equipo_local, equipo_visita
         api_key = st.secrets["GEMINI_API_KEY"]
         client = genai.Client(api_key=api_key)
 
-        tiene_defensa = any(
-            k in datos_extraidos
-            for k in [
-                "recuperaciones_local",
-                "duelos_def_local",
-                "intercepciones_local",
-            ]
-        )
-        instruccion_defensa = (
-            "Se incluyen métricas defensivas explícitas."
-            if tiene_defensa
-            else "El tagueo actual se enfoca en métricas con balón. Si faltan eventos defensivos explícitos, analiza la fase de posesión y eficacia sin asumir errores no registrados."
-        )
-
         prompt = f"""
         Actúa como Director Técnico y Analista Táctico de fútbol profesional.
-        Analiza las siguientes estadísticas de un partido entre {equipo_local} (Local) vs {equipo_visita} (Visitante):
+        Analiza el siguiente reporte numérico y de eventos extraído de un archivo de tagueo de partido entre {equipo_local} (Local) y {equipo_visita} (Visitante):
 
-        CONTEXTO TÁCTICO: {instruccion_defensa}
+        TEXTO EXTRAÍDO DEL TAGUEO:
+        {texto_partido}
 
-        ESTADÍSTICAS DEL PARTIDO:
-        {json.dumps(datos_extraidos, indent=2)}
+        Instrucciones:
+        1. Extrae con precisión las estadísticas numéricas del encuentro.
+        2. Realiza un análisis táctico profesional basado estricta y únicamente en los datos numéricos encontrados.
 
-        Genera una respuesta en formato JSON estricto con exactamente estas claves:
-        - lectura_general: Párrafo claro (3-4 líneas) resumiendo el balance táctico y la clave del resultado.
-        - conclusiones: Lista de exactamente 3 conclusiones tácticas cortas.
-        - aspectos_conservar: Lista de 3 fortalezas del equipo {equipo_local}.
-        - aspectos_corregir: Lista de 3 aspectos a mejorar del equipo {equipo_local}.
-        - focos_entrenamiento: Lista de 3 ejercicios o enfoques tácticos para el entrenamiento semanal.
+        Responde en formato JSON estricto con las siguientes claves exactas:
+        {{
+            "pos_local": "porcentaje posesión local (ej: 45.3%)",
+            "pos_visita": "porcentaje posesión visitante (ej: 54.7%)",
+            "goles_local": 4,
+            "goles_visita": 2,
+            "remates_local": 20,
+            "remates_visita": 34,
+            "pases_local": 91,
+            "pases_visita": 111,
+            "pases_exitosos_local": 55,
+            "pases_exitosos_visita": 73,
+            "precision_pase_local": "60%",
+            "precision_pase_visita": "65%",
+            "lectura_general": "Párrafo de 3 a 4 líneas sintetizando el partido.",
+            "conclusiones": ["Conclusión táctica 1", "Conclusión táctica 2", "Conclusión táctica 3"],
+            "aspectos_conservar": ["Fortaleza 1", "Fortaleza 2", "Fortaleza 3"],
+            "aspectos_corregir": ["Punto a mejorar 1", "Punto a mejorar 2", "Punto a mejorar 3"],
+            "focos_entrenamiento": ["Foco entrenamiento 1", "Foco entrenamiento 2", "Foco entrenamiento 3"]
+        }}
         """
 
         response = client.models.generate_content(
@@ -390,7 +373,7 @@ def generar_analisis_tactico_gemini(datos_extraidos, equipo_local, equipo_visita
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                temperature=0.3,
+                temperature=0.2,
             ),
         )
 
@@ -401,7 +384,7 @@ def generar_analisis_tactico_gemini(datos_extraidos, equipo_local, equipo_visita
 
 
 # =====================================================================
-# 📑 EXTRACCIÓN AUTOMÁTICA DE DATOS Y RECURSOS
+# 📑 SANITIZACIÓN & EXTRACCIÓN AUTOMÁTICA DE GRÁFICOS Y DATOS
 # =====================================================================
 def sanitizar_texto(texto):
     if not isinstance(texto, str):
@@ -442,12 +425,11 @@ def sanitizar_texto(texto):
 
 def extraer_datos_y_graficos(lista_archivos):
     if not lista_archivos:
-        return {}, {}
+        return "", {}
 
     if not isinstance(lista_archivos, list):
         lista_archivos = [lista_archivos]
 
-    datos = {}
     graficos = {"shot_chart": None, "passing_tercios": None}
     texto_consolidado = ""
 
@@ -458,33 +440,7 @@ def extraer_datos_y_graficos(lista_archivos):
         if nombre.endswith(".csv"):
             try:
                 df = pd.read_csv(io.BytesIO(file_bytes))
-                for _, row in df.iterrows():
-                    clave = str(row.iloc[0]).strip().lower()
-                    val_local = row.iloc[1] if len(row) > 1 else 0
-                    val_visita = row.iloc[2] if len(row) > 2 else 0
-
-                    if "possession" in clave:
-                        datos["pos_local"] = str(val_local)
-                        datos["pos_visita"] = str(val_visita)
-                    elif "shots" in clave and "target" not in clave:
-                        datos["remates_local"] = val_local
-                        datos["remates_visita"] = val_visita
-                    elif "goals" in clave:
-                        datos["goles_local"] = val_local
-                        datos["goles_visita"] = val_visita
-                    elif "passes" in clave and "successful" not in clave:
-                        datos["pases_local"] = val_local
-                        datos["pases_visita"] = val_visita
-                    elif "successful passes" in clave:
-                        datos["pases_exitosos_local"] = val_local
-                        datos["pases_exitosos_visita"] = val_visita
-                    elif (
-                        "tackles" in clave
-                        or "recoveries" in clave
-                        or "recuperaciones" in clave
-                    ):
-                        datos["recuperaciones_local"] = val_local
-                        datos["recuperaciones_visita"] = val_visita
+                texto_consolidado += "\n" + df.to_string()
             except Exception as e:
                 st.error(f"Error procesando CSV {nombre}: {e}")
 
@@ -519,60 +475,11 @@ def extraer_datos_y_graficos(lista_archivos):
             except Exception as e:
                 st.error(f"Error al procesar PDF {nombre}: {e}")
 
-    if texto_consolidado:
-        pos_m = re.search(
-            r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)",
-            texto_consolidado,
-            re.IGNORECASE,
-        )
-        if pos_m:
-            datos["pos_local"] = pos_m.group(1)
-            datos["pos_visita"] = pos_m.group(2)
-
-        goles_m = re.search(
-            r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
-        )
-        if goles_m:
-            datos["goles_local"] = int(goles_m.group(1))
-            datos["goles_visita"] = int(goles_m.group(2))
-
-        shots_m = re.search(
-            r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
-        )
-        if shots_m:
-            datos["remates_local"] = int(shots_m.group(1))
-            datos["remates_visita"] = int(shots_m.group(2))
-
-        pases_m = re.search(
-            r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
-        )
-        if pases_m:
-            datos["pases_local"] = int(pases_m.group(1))
-            datos["pases_visita"] = int(pases_m.group(2))
-
-        sp_m = re.search(
-            r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
-            texto_consolidado,
-            re.IGNORECASE,
-        )
-        if sp_m:
-            datos["pases_exitosos_local"] = int(sp_m.group(1))
-            datos["pases_exitosos_visita"] = int(sp_m.group(2))
-
-        rec_m = re.search(
-            r"Recoveries\s*\|\s*(\d+)\s*\|\s*(\d+)",
-            texto_consolidado,
-            re.IGNORECASE,
-        )
-        if rec_m:
-            datos["recuperaciones_local"] = int(rec_m.group(1))
-            datos["recuperaciones_visita"] = int(rec_m.group(2))
-
-    return datos, graficos
+    return texto_consolidado, graficos
 
 
 # =====================================================================
-# 📑 FPDF GENERATOR CON RADAR TÁCTICO DENTRO DEL REPORTE
+# 📑 FPDF GENERATOR AJUSTADO PARA EVITAR DESBORDAMIENTO DE TEXTO
 # =====================================================================
 class PDFReporteFocus(FPDF):
 
@@ -603,7 +510,7 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
     eq_vis = sanitizar_texto(data["equipo_visita"])
     fec_str = sanitizar_texto(data["fecha"])
 
-    # PÁGINA 1
+    # PÁGINA 1: PORTADA
     pdf.add_page()
     pdf.set_fill_color(*DARK)
     pdf.rect(0, 0, 210, 297, "F")
@@ -631,7 +538,7 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
     pdf.cell(
         0,
         12,
-        f"{eq_loc.upper()} {data['goles_local']} - {data['goles_visita']} {eq_vis.upper()}",
+        f"{eq_loc.upper()} {data.get('goles_local', 0)} - {data.get('goles_visita', 0)} {eq_vis.upper()}",
         ln=True,
         align="C",
     )
@@ -650,7 +557,7 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
         0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C"
     )
 
-    # PÁGINA 2
+    # PÁGINA 2: ANÁLISIS GENERAL
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -668,7 +575,7 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
     pdf.cell(
         0,
         14,
-        f"{eq_loc}  {data['goles_local']} - {data['goles_visita']}  {eq_vis}",
+        f"{eq_loc}  {data.get('goles_local', 0)} - {data.get('goles_visita', 0)}  {eq_vis}",
         ln=True,
         align="C",
     )
@@ -701,9 +608,11 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
     pdf.set_x(58)
     pdf.cell(44, 8, f"{data.get('remates_local', '20')}", align="C")
     pdf.set_x(106)
-    pdf.cell(44, 8, f"{data.get('goles_local', '5')}", align="C")
+    pdf.cell(44, 8, f"{data.get('goles_local', '4')}", align="C")
     pdf.set_x(154)
-    pdf.cell(46, 8, "60%", align="C", ln=True)
+    pdf.cell(
+        46, 8, f"{data.get('precision_pase_local', '60%')}", align="C", ln=True
+    )
     pdf.ln(12)
 
     pdf.set_font("Helvetica", "B", 11)
@@ -719,9 +628,10 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
     pdf.cell(0, 6, "Tres conclusiones rápidas:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for conc in data.get("conclusiones", []):
-        pdf.cell(0, 6, f"- {sanitizar_texto(conc)}", ln=True)
+        pdf.multi_cell(0, 5, f"- {sanitizar_texto(conc)}")
+        pdf.ln(1)
 
-    # PÁGINA 3: RADAR CHART TÁCTICO INYECTADO
+    # PÁGINA 3: COMPARATIVO Y RADAR
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -735,8 +645,8 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
 
     if buf_radar:
         try:
-            pdf.image(buf_radar, x=35, y=50, w=140)
-            pdf.set_y(195)
+            pdf.image(buf_radar, x=35, y=45, w=140)
+            pdf.set_y(190)
         except Exception:
             pdf.cell(
                 0, 10, "[Error al renderizar el Radar Chart Cyber-Tech]", ln=True
@@ -748,7 +658,11 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
             data.get("pos_local", "45.3%"),
             data.get("pos_visita", "54.7%"),
         ),
-        ("Goles", data.get("goles_local", "5"), data.get("goles_visita", "2")),
+        (
+            "Goles",
+            data.get("goles_local", "4"),
+            data.get("goles_visita", "2"),
+        ),
         (
             "Remates",
             data.get("remates_local", "20"),
@@ -758,6 +672,11 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
             "Pases Exitosos",
             data.get("pases_exitosos_local", "55"),
             data.get("pases_exitosos_visita", "73"),
+        ),
+        (
+            "Precisión Pase (%)",
+            data.get("precision_pase_local", "60%"),
+            data.get("precision_pase_visita", "65%"),
         ),
     ]
 
@@ -775,7 +694,7 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
         pdf.cell(50, 6, f" {sanitizar_texto(v1)}", 1, 0, "C")
         pdf.cell(50, 6, f" {sanitizar_texto(v2)}", 1, 1, "C")
 
-    # PÁGINA 4
+    # PÁGINA 4: ATAQUE
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -791,7 +710,7 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
         except Exception:
             pdf.cell(0, 10, "[Error al renderizar Shot Chart]", ln=True)
 
-    # PÁGINA 5
+    # PÁGINA 5: PASE Y TERCIOS
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -807,7 +726,7 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
         except Exception:
             pdf.cell(0, 10, "[Error al renderizar diagramas de pases]", ln=True)
 
-    # PÁGINA 6
+    # PÁGINA 6: CONCLUSIONES Y TRABAJO
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -815,27 +734,30 @@ def generar_pdf_6_paginas(data, graficos, buf_radar=None):
     pdf.set_font("Helvetica", "I", 10)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(0, 6, "Síntesis técnica para seguimiento del equipo", ln=True)
-    pdf.ln(8)
+    pdf.ln(6)
 
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Aspectos a conservar:", ln=True)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "Aspectos a conservar:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_conservar", []):
-        pdf.cell(0, 6, f"[OK] {sanitizar_texto(asp)}", ln=True)
+        pdf.multi_cell(0, 5, f"[OK] {sanitizar_texto(asp)}")
+        pdf.ln(1)
 
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Aspectos a corregir:", ln=True)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "Aspectos a corregir:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_corregir", []):
-        pdf.cell(0, 6, f"[X] {sanitizar_texto(asp)}", ln=True)
+        pdf.multi_cell(0, 5, f"[X] {sanitizar_texto(asp)}")
+        pdf.ln(1)
 
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Focos sugeridos para entrenamiento:", ln=True)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "Focos sugeridos para entrenamiento:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for foc in data.get("focos_entrenamiento", []):
-        pdf.cell(0, 6, f"> {sanitizar_texto(foc)}", ln=True)
+        pdf.multi_cell(0, 5, f"> {sanitizar_texto(foc)}")
+        pdf.ln(1)
 
     return bytes(pdf.output())
 
@@ -993,30 +915,23 @@ with tab_admin:
                     "Fecha:", value="12 de septiembre de 2026"
                 )
 
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                g_local = st.number_input("Goles Local:", min_value=0, value=5)
-            with col_g2:
-                g_visita = st.number_input(
-                    "Goles Visitante:", min_value=0, value=2
-                )
-
             if st.button(
                 "🤖 GENERAR ANÁLISIS TÁCTICO AUTOMÁTICO CON GEMINI IA",
                 use_container_width=True,
             ):
                 if archivos_tagueo:
                     with st.spinner(
-                        "Gemini IA está analizando los datos numéricos y tácticos del partido..."
+                        "Gemini IA está procesando el reporte completo del partido..."
                     ):
-                        datos_extraidos, _ = extraer_datos_y_graficos(
+                        texto_crudo, _ = extraer_datos_y_graficos(
                             archivos_tagueo
                         )
                         analisis_ia = generar_analisis_tactico_gemini(
-                            datos_extraidos, eq_local, eq_visita
+                            texto_crudo, eq_local, eq_visita
                         )
 
                         if analisis_ia:
+                            st.session_state["stats_partido"] = analisis_ia
                             st.session_state["lectura_gen"] = analisis_ia.get(
                                 "lectura_general", ""
                             )
@@ -1046,7 +961,7 @@ with tab_admin:
                             )
                 else:
                     st.warning(
-                        "⚠️ Sube primero los archivos PDF de tagueo para que Gemini pueda leer las estadísticas."
+                        "⚠️ Sube primero los archivos PDF de tagueo para procesar el partido."
                     )
 
             st.write("---")
@@ -1081,23 +996,22 @@ with tab_admin:
                 "🚀 GENERAR Y DESCARGAR PDF DE 6 PÁGINAS",
                 use_container_width=True,
             ):
-                datos_extraidos, graficos_extraidos = (
+                _, graficos_extraidos = (
                     extraer_datos_y_graficos(archivos_tagueo)
                     if archivos_tagueo
-                    else ({}, {})
+                    else ("", {})
                 )
 
-                # Renderizado dinámico del Radar Chart Nivel Cyber-Tech
+                datos_finales = st.session_state.get("stats_partido", {})
+
                 buf_radar = generar_radar_chart_tactico(
-                    datos_extraidos, eq_local, eq_visita
+                    datos_finales, eq_local, eq_visita
                 )
 
                 data_pdf = {
                     "equipo_local": eq_local,
                     "equipo_visita": eq_visita,
                     "fecha": fecha_p,
-                    "goles_local": g_local,
-                    "goles_visita": g_visita,
                     "lectura_general": lectura_gen,
                     "conclusiones": [conc_1, conc_2, conc_3],
                     "aspectos_conservar": [
@@ -1109,7 +1023,7 @@ with tab_admin:
                     "focos_entrenamiento": [
                         x.strip() for x in foc_ent.split(",") if x.strip()
                     ],
-                    **datos_extraidos,
+                    **datos_finales,
                 }
 
                 pdf_bytes = generar_pdf_6_paginas(
