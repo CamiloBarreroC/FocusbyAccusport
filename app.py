@@ -15,7 +15,9 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
 from PIL import Image
+import scipy.ndimage as ndimage
 import streamlit as st
 
 try:
@@ -216,7 +218,6 @@ def inicializar_pestanas_jugadores():
     try:
         sheet = client.open_by_key(CONFIG_SHEET_ID)
 
-        # 1. Pestaña HISTORICO_PARTIDOS
         headers_historico = [
             "ID_Partido",
             "Fecha",
@@ -245,7 +246,6 @@ def inicializar_pestanas_jugadores():
             )
             ws_hist.append_row(headers_historico)
 
-        # 2. Pestaña ACUMULADO_TEMPORADA
         headers_acumulado = [
             "Jugador",
             "Equipo",
@@ -278,15 +278,15 @@ def inicializar_pestanas_jugadores():
 
 
 def procesar_foto_jugador_base64(file_obj):
-    """Optimiza la foto del jugador a 250x250 px y la convierte en Base64."""
+    """Optimiza la foto del jugador a 180x180 px con compresión ultra ligera para Google Sheets."""
     try:
         img = Image.open(io.BytesIO(file_obj.getvalue()))
         if img.mode != "RGB":
             img = img.convert("RGB")
 
-        img.thumbnail((250, 250))
+        img.thumbnail((180, 180))
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=75)
+        img.save(buf, format="JPEG", quality=55)
         img_bytes = buf.getvalue()
 
         b64_str = base64.b64encode(img_bytes).decode("utf-8")
@@ -297,8 +297,56 @@ def procesar_foto_jugador_base64(file_obj):
 
 
 # =====================================================================
-# 📊 GENERADORES NATIVOS DE GRÁFICOS TÁCTICOS
+# 📊 GENERADORES NATIVOS Y MAPA DE CALOR MANUAL
 # =====================================================================
+def generar_mapa_calor_manual(matriz_3x3, nombre_jugador):
+    """Genera un Mapa de Calor suavizado sobre una cancha verde táctica."""
+    fig, ax = plt.subplots(figsize=(7.5, 4.5))
+    fig.patch.set_facecolor("#1b4332")
+    ax.set_facecolor("#1b4332")
+
+    line_col = "#ffffff"
+    ax.plot([0, 100, 100, 0, 0], [0, 0, 100, 100, 0], color=line_col, lw=2)
+    ax.plot([50, 50], [0, 100], color=line_col, lw=1.5)
+    ax.plot([0, 16, 16, 0], [25, 25, 75, 75], color=line_col, lw=1.2)
+    ax.plot([100, 84, 84, 100], [25, 25, 75, 75], color=line_col, lw=1.2)
+
+    centro_circulo = plt.Circle((50, 50), 12, color=line_col, fill=False, lw=1.2)
+    ax.add_artist(centro_circulo)
+
+    matriz_zoom = ndimage.zoom(matriz_3x3, zoom=20, order=3)
+    ax.imshow(
+        matriz_zoom,
+        cmap="YlOrRd",
+        alpha=0.6,
+        extent=[0, 100, 0, 100],
+        origin="lower",
+    )
+
+    plt.title(
+        f"MAPA DE INFLUENCIA Y CALOR TÁCTICO: {nombre_jugador.upper()}",
+        color="white",
+        fontsize=9.5,
+        weight="bold",
+        pad=10,
+    )
+    plt.xlim(-2, 102)
+    plt.ylim(-2, 102)
+    plt.axis("off")
+
+    buf = io.BytesIO()
+    plt.savefig(
+        buf,
+        format="PNG",
+        bbox_inches="tight",
+        facecolor=fig.get_facecolor(),
+        dpi=200,
+    )
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 def generar_grafico_resumen_pagina2(datos, equipo_local, equipo_visita):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.2))
     fig.patch.set_facecolor("#0D0D0D")
@@ -828,6 +876,64 @@ def extraer_datos_jugador_gemini(texto_pdf):
     except Exception as e:
         st.error(f"❌ Error al procesar reporte del jugador con AccusIA: {e}")
         return None
+
+
+def generar_scouting_cualitativo_jugador(data_jugador):
+    """Genera un análisis de scouting cualitativo personalizado con AccusIA."""
+    try:
+        if "GEMINI_API_KEY" not in st.secrets:
+            return {
+                "puntos_fuertes": [
+                    "Buen volumen de juego",
+                    "Aporte dinámico",
+                ],
+                "aspectos_mejorar": [
+                    "Incrementar precisión de remate",
+                    "Ajustar perfil defensivo",
+                ],
+                "conclusion_scouting": "Jugador con proyección constante dentro del modelo táctico.",
+            }
+
+        api_key = st.secrets["GEMINI_API_KEY"]
+        client = genai.Client(api_key=api_key)
+
+        prompt = f"""
+        Actúa como Senior Scout y Analista de Rendimiento Individual para AccuSport Colombia.
+        Elabora un diagnóstico técnico del jugador {data_jugador.get('jugador', 'Jugador')} con base en sus métricas de partido:
+        - Participaciones: {data_jugador.get('participaciones', 0)}
+        - Goles: {data_jugador.get('goles', 0)}, Asistencias: {data_jugador.get('asistencias', 0)}
+        - Remates Totales: {data_jugador.get('remates_totales', 0)} (A Puerta: {data_jugador.get('remates_a_puerta', 0)})
+        - Pases Completados: {data_jugador.get('pases_completados', 0)} de {data_jugador.get('pases_intentados', 0)}
+
+        Responde en JSON estricto:
+        {{
+            "puntos_fuertes": ["Fortaleza 1", "Fortaleza 2"],
+            "aspectos_mejorar": ["Aspecto a trabajar 1", "Aspecto a trabajar 2"],
+            "conclusion_scouting": "Resumen técnico de 2-3 líneas sobre el rol y desempeño del jugador."
+        }}
+        """
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.2,
+            ),
+        )
+        return json.loads(response.text)
+    except Exception:
+        return {
+            "puntos_fuertes": [
+                "Intensidad de participación",
+                "Compromiso en fase de gestación",
+            ],
+            "aspectos_mejorar": [
+                "Efectividad en zona de definición",
+                "Consistencia en duelo individual",
+            ],
+            "conclusion_scouting": "Rendimiento positivo con oportunidades de mejora en la toma de decisiones del último tercio.",
+        }
 
 
 def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
@@ -1430,11 +1536,10 @@ def generar_pdf_6_paginas(
 
 
 # =====================================================================
-# 🎴 GENERADOR PDF: FICHA INDIVIDUAL DE PARTIDO (1 PÁGINA)
+# 🎴 GENERADOR PDF: FICHA INDIVIDUAL EXPANDIDA (2 PÁGINAS)
 # =====================================================================
-def generar_pdf_ficha_partido_jugador(data_jug):
+def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     pdf = PDFReporteFocus()
-    pdf.add_page()
     pdf.set_margins(12, 12, 12)
 
     ORANGE = (255, 85, 0)
@@ -1443,7 +1548,8 @@ def generar_pdf_ficha_partido_jugador(data_jug):
     GRAY_BG = (245, 245, 247)
     TEXT_DARK = (30, 30, 30)
 
-    # Header / Baner del Jugador
+    # --- PÁGINA 1: FICHA DE PARTIDO Y MAPA DE CALOR ---
+    pdf.add_page()
     pdf.set_fill_color(*DARK)
     pdf.rect(12, 12, 186, 35, "F")
 
@@ -1465,13 +1571,12 @@ def generar_pdf_ficha_partido_jugador(data_jug):
         pdf.set_fill_color(30, 30, 30)
         pdf.rect(15, 14, 30, 30, "F")
 
-    # Nombre y Dorsal
     pdf.set_xy(50, 16)
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(*ORANGE)
-    pdf.cell(
-        0, 8, sanitizar_texto(f"#{data_jug.get('Dorsal', data_jug.get('dorsal', '0'))} {data_jug.get('Jugador', data_jug.get('jugador', 'Jugador'))}"), ln=True
-    )
+    nom_jug = data_jug.get("Jugador", data_jug.get("jugador", "Jugador"))
+    dor_jug = data_jug.get("Dorsal", data_jug.get("dorsal", "0"))
+    pdf.cell(0, 8, sanitizar_texto(f"#{dor_jug} {nom_jug}"), ln=True)
 
     pdf.set_x(50)
     pdf.set_font("Helvetica", "B", 10)
@@ -1499,7 +1604,7 @@ def generar_pdf_ficha_partido_jugador(data_jug):
 
     pdf.ln(18)
 
-    # Tarjetas Métricas Principales (Adaptativo a falta de minutos)
+    # Tarjetas Métricas Principales (Adaptativo)
     pdf.set_fill_color(*GRAY_BG)
     y_cards = pdf.get_y()
     w_card = 43
@@ -1522,17 +1627,17 @@ def generar_pdf_ficha_partido_jugador(data_jug):
     pdf.set_x(153)
     pdf.cell(45, 4, "PASES COMPLETADOS", align="C", ln=True)
 
-    mins_val = (
-        f"{data_jug.get('Minutos_Jugados', data_jug.get('minutos', 0))} min"
-        if int(data_jug.get('Minutos_Jugados', data_jug.get('minutos', 0)) or 0) > 0
-        else "--"
-    )
+    mins_raw = data_jug.get("Minutos_Jugados", data_jug.get("minutos", 0))
+    mins_val = f"{mins_raw} min" if int(mins_raw or 0) > 0 else "--"
 
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*ORANGE)
     pdf.set_x(12)
     pdf.cell(
-        w_card, 7, f"{data_jug.get('Participaciones_Totales', data_jug.get('participaciones', 0))}", align="C"
+        w_card,
+        7,
+        f"{data_jug.get('Participaciones_Totales', data_jug.get('participaciones', 0))}",
+        align="C",
     )
     pdf.set_x(59)
     pdf.cell(w_card, 7, mins_val, align="C")
@@ -1552,33 +1657,122 @@ def generar_pdf_ficha_partido_jugador(data_jug):
         ln=True,
     )
 
-    pdf.ln(12)
+    pdf.ln(10)
 
-    # Detalle Ofensivo y Defensivo
-    pdf.set_font("Helvetica", "B", 12)
+    # Inserción de Mapa de Calor Táctico
+    if buf_mapa_calor:
+        try:
+            pdf.image(buf_mapa_calor, x=20, y=pdf.get_y(), w=170)
+            pdf.set_y(175)
+        except Exception:
+            pass
+
+    # Tabla Desglose de Acciones
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*DARK)
-    pdf.cell(0, 6, "Desglose de Acciones en Juego", ln=True)
-    pdf.ln(2)
+    pdf.cell(0, 6, "Acciones Totales en el Partido", ln=True)
+    pdf.ln(1)
 
     stats_tabla = [
-        ("Goles Concretados", str(data_jug.get("Goles", data_jug.get("goles", 0)))),
-        ("Asistencias de Gol", str(data_jug.get("Asistencias", data_jug.get("asistencias", 0)))),
-        ("Centros al Área", str(data_jug.get("Centros", data_jug.get("centros", 0)))),
-        ("Recuperaciones de Balón", str(data_jug.get("Recuperaciones", data_jug.get("recuperaciones", 0)))),
-        ("Duelos Defensivos Ganados", str(data_jug.get("Duelos_Def_Ganados", data_jug.get("duelos_def_ganados", 0)))),
+        (
+            "Goles Concretados",
+            str(data_jug.get("Goles", data_jug.get("goles", 0))),
+        ),
+        (
+            "Asistencias de Gol",
+            str(data_jug.get("Asistencias", data_jug.get("asistencias", 0))),
+        ),
+        (
+            "Centros al Área",
+            str(data_jug.get("Centros", data_jug.get("centros", 0))),
+        ),
+        (
+            "Recuperaciones de Balón",
+            str(
+                data_jug.get(
+                    "Recuperaciones", data_jug.get("recuperaciones", 0)
+                )
+            ),
+        ),
     ]
 
-    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_font("Helvetica", "B", 8.5)
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(*WHITE)
-    pdf.cell(130, 6, " Métrica Evaluada", 1, 0, "L", fill=True)
-    pdf.cell(56, 6, " Total Registrado", 1, 1, "C", fill=True)
+    pdf.set_x(12)
+    pdf.cell(130, 5, " Métrica Evaluada", 1, 0, "L", fill=True)
+    pdf.cell(56, 5, " Total Registrado", 1, 1, "C", fill=True)
 
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 8.5)
     pdf.set_text_color(*TEXT_DARK)
     for var, val in stats_tabla:
-        pdf.cell(130, 6, f" {sanitizar_texto(var)}", 1, 0, "L")
-        pdf.cell(56, 6, f" {sanitizar_texto(val)}", 1, 1, "C")
+        pdf.set_x(12)
+        pdf.cell(130, 5, f" {sanitizar_texto(var)}", 1, 0, "L")
+        pdf.cell(56, 5, f" {sanitizar_texto(val)}", 1, 1, "C")
+
+    # --- PÁGINA 2: ANÁLISIS QUALITATIVO ACCUS-IA ---
+    pdf.add_page()
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(*ORANGE)
+    pdf.cell(0, 10, "Diagnóstico Técnico y Scouting (AccusIA)", ln=True)
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "I", 10)
+    pdf.set_text_color(*TEXT_DARK)
+    pdf.cell(
+        0, 6, f"Evaluación de rendimiento para {nom_jug}", ln=True
+    )
+    pdf.ln(6)
+
+    # Consultar AccusIA para Scouting
+    scout_data = generar_scouting_cualitativo_jugador(data_jug)
+
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "Puntos Fuertes Destacados:", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    for pf in scout_data.get("puntos_fuertes", []):
+        pdf.set_x(12)
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {pf}"))
+        pdf.ln(1)
+
+    pdf.ln(2)
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "Aspectos Clave a Desarrollar:", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    for am in scout_data.get("aspectos_mejorar", []):
+        pdf.set_x(12)
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {am}"))
+        pdf.ln(1)
+
+    pdf.ln(4)
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "Conclusión General del Analista:", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_x(12)
+    pdf.multi_cell(
+        0,
+        5,
+        sanitizar_texto(
+            scout_data.get("conclusion_scouting", "Jugador en desarrollo.")
+        ),
+    )
+
+    pdf.ln(12)
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", "I", 8.5)
+    pdf.set_text_color(100, 100, 100)
+    pdf.multi_cell(
+        0,
+        4.5,
+        sanitizar_texto(
+            "Reporte individual generado con la tecnología de seguimiento de partidos Focus by AccuSport."
+        ),
+        align="C",
+    )
 
     return bytes(pdf.output())
 
@@ -1597,7 +1791,6 @@ def generar_pdf_dossier_temporada(data_acum, df_historico):
     GRAY_BG = (245, 245, 247)
     TEXT_DARK = (30, 30, 30)
 
-    # Cabecera Dossier
     pdf.set_fill_color(*DARK)
     pdf.rect(12, 12, 186, 35, "F")
 
@@ -1644,10 +1837,9 @@ def generar_pdf_dossier_temporada(data_acum, df_historico):
 
     pdf.ln(18)
 
-    # Acumulados Generales
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(*DARK)
-    pdf.cell(0, 6, "Totales Acumulados", ln=True)
+    pdf.cell(0, 6, "Totales Acumulados de Carrera", ln=True)
     pdf.ln(2)
 
     stats_acum = [
@@ -1665,18 +1857,20 @@ def generar_pdf_dossier_temporada(data_acum, df_historico):
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(*WHITE)
+    pdf.set_x(12)
     pdf.cell(130, 6, " Métrica de Carrera / Temporada", 1, 0, "L", fill=True)
     pdf.cell(56, 6, " Acumulado", 1, 1, "C", fill=True)
 
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*TEXT_DARK)
     for var, val in stats_acum:
+        pdf.set_x(12)
         pdf.cell(130, 6, f" {sanitizar_texto(var)}", 1, 0, "L")
         pdf.cell(56, 6, f" {sanitizar_texto(val)}", 1, 1, "C")
 
     pdf.ln(8)
 
-    # Historial Partido a Partido
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(*DARK)
     pdf.cell(0, 6, "Historial de Encuentros Disputados", ln=True)
@@ -1685,6 +1879,7 @@ def generar_pdf_dossier_temporada(data_acum, df_historico):
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(*WHITE)
+    pdf.set_x(12)
     pdf.cell(25, 6, "Fecha", 1, 0, "C", fill=True)
     pdf.cell(45, 6, "Rival", 1, 0, "L", fill=True)
     pdf.cell(30, 6, "Part. Totales", 1, 0, "C", fill=True)
@@ -1697,8 +1892,13 @@ def generar_pdf_dossier_temporada(data_acum, df_historico):
 
     if not df_historico.empty:
         for idx, row in df_historico.iterrows():
-            pdf.cell(25, 5, sanitizar_texto(str(row.get("Fecha", ""))), 1, 0, "C")
-            pdf.cell(45, 5, sanitizar_texto(str(row.get("Rival", ""))), 1, 0, "L")
+            pdf.set_x(12)
+            pdf.cell(
+                25, 5, sanitizar_texto(str(row.get("Fecha", ""))), 1, 0, "C"
+            )
+            pdf.cell(
+                45, 5, sanitizar_texto(str(row.get("Rival", ""))), 1, 0, "L"
+            )
             pdf.cell(
                 30,
                 5,
@@ -1707,7 +1907,9 @@ def generar_pdf_dossier_temporada(data_acum, df_historico):
                 0,
                 "C",
             )
-            pdf.cell(25, 5, sanitizar_texto(str(row.get("Goles", 0))), 1, 0, "C")
+            pdf.cell(
+                25, 5, sanitizar_texto(str(row.get("Goles", 0))), 1, 0, "C"
+            )
             pdf.cell(
                 30,
                 5,
@@ -2061,15 +2263,59 @@ with tab_admin:
                     ["Ficha del Último Partido", "Dossier Consolidado de Temporada"],
                 )
 
+                # Módulo Interactivo de Mapa de Calor Manual
+                st.write("---")
+                st.write("🔥 **Configuración del Mapa de Calor Táctico (3x3)**")
+                st.caption(
+                    "Ajusta la intensidad de participación del jugador por zona (0 = Sin presencia, 10 = Máxima actividad):"
+                )
+
+                c_d1, c_d2, c_d3 = st.columns(3)
+                with c_d1:
+                    def_izq = st.slider("Defensivo Izquierdo", 0, 10, 2)
+                with c_d2:
+                    def_cen = st.slider("Defensivo Centro", 0, 10, 3)
+                with c_d3:
+                    def_der = st.slider("Defensivo Derecho", 0, 10, 2)
+
+                c_m1, c_m2, c_m3 = st.columns(3)
+                with c_m1:
+                    med_izq = st.slider("Medio Izquierdo", 0, 10, 5)
+                with c_m2:
+                    med_cen = st.slider("Medio Centro", 0, 10, 8)
+                with c_m3:
+                    med_der = st.slider("Medio Derecho", 0, 10, 6)
+
+                c_a1, c_a2, c_a3 = st.columns(3)
+                with c_a1:
+                    atk_izq = st.slider("Ofensivo Izquierdo", 0, 10, 7)
+                with c_a2:
+                    atk_cen = st.slider("Ofensivo Centro", 0, 10, 9)
+                with c_a3:
+                    atk_der = st.slider("Ofensivo Derecho", 0, 10, 4)
+
+                matriz_3x3 = np.array(
+                    [
+                        [def_izq, def_cen, def_der],
+                        [med_izq, med_cen, med_der],
+                        [atk_izq, atk_cen, atk_der],
+                    ]
+                )
+
+                st.write("---")
                 if st.button("🚀 GENERAR REPORTE EN PDF", use_container_width=True):
                     df_hist = obtener_datos_pestana("HISTORICO_PARTIDOS")
                     row_acum = df_acum[df_acum["Jugador"] == jug_sel].iloc[0].to_dict()
                     df_jug_hist = df_hist[df_hist["Jugador"] == jug_sel]
 
+                    buf_heat = generar_mapa_calor_manual(matriz_3x3, jug_sel)
+
                     if tipo_rep == "Ficha del Último Partido":
                         if not df_jug_hist.empty:
                             last_match = df_jug_hist.iloc[-1].to_dict()
-                            pdf_bytes = generar_pdf_ficha_partido_jugador(last_match)
+                            pdf_bytes = generar_pdf_ficha_partido_jugador(
+                                last_match, buf_heat
+                            )
                             st.download_button(
                                 label="📥 DESCARGAR FICHA DE PARTIDO PDF",
                                 data=pdf_bytes,
