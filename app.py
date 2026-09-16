@@ -205,6 +205,74 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
     return False
 
 
+def inicializar_pestanas_jugadores():
+    client = obtener_cliente_sheets()
+    if not client:
+        st.error("❌ No se pudo conectar con Google Sheets.")
+        return
+
+    try:
+        sheet = client.open_by_key(CONFIG_SHEET_ID)
+
+        # 1. Pestaña HISTORICO_PARTIDOS
+        headers_historico = [
+            "ID_Partido",
+            "Fecha",
+            "Equipo",
+            "Rival",
+            "Jugador",
+            "Dorsal",
+            "Minutos_Jugados",
+            "Participaciones_Totales",
+            "Goles",
+            "Asistencias",
+            "Remates_Totales",
+            "Remates_A_Puerta",
+            "Centros",
+            "Pases_Intentados",
+            "Pases_Completados",
+            "Recuperaciones",
+            "Duelos_Def_Ganados",
+        ]
+        try:
+            ws_hist = sheet.worksheet("HISTORICO_PARTIDOS")
+        except Exception:
+            ws_hist = sheet.add_worksheet(
+                title="HISTORICO_PARTIDOS", rows=100, cols=20
+            )
+            ws_hist.append_row(headers_historico)
+
+        # 2. Pestaña ACUMULADO_TEMPORADA
+        headers_acumulado = [
+            "Jugador",
+            "Equipo",
+            "Dorsal",
+            "Partidos_Jugados",
+            "Minutos_Totales",
+            "Goles_Totales",
+            "Asistencias_Totales",
+            "Remates_Totales",
+            "Remates_A_Puerta",
+            "Efectividad_Remate_%",
+            "Pases_Completados",
+            "Precision_Pase_%",
+            "Recuperaciones_Totales",
+        ]
+        try:
+            ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
+        except Exception:
+            ws_acum = sheet.add_worksheet(
+                title="ACUMULADO_TEMPORADA", rows=100, cols=20
+            )
+            ws_acum.append_row(headers_acumulado)
+
+        st.success(
+            "✅ Pestañas 'HISTORICO_PARTIDOS' y 'ACUMULADO_TEMPORADA' listadas y creadas correctamente en Google Sheets."
+        )
+    except Exception as e:
+        st.error(f"❌ Error al inicializar pestañas: {e}")
+
+
 # =====================================================================
 # 📊 GENERADORES NATIVOS DE GRÁFICOS TÁCTICOS
 # =====================================================================
@@ -397,6 +465,7 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     ax.spines["polar"].set_linewidth(1.5)
     ax.grid(color="#222222", linestyle="--", linewidth=0.8)
 
+    # Fortaleza (Naranja)
     ax.plot(
         angulos,
         val_loc,
@@ -407,6 +476,7 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_loc, color="#FF5500", alpha=0.35)
 
+    # Aurinegro (Cian Neón para diferenciación clara)
     ax.plot(
         angulos,
         val_vis,
@@ -417,6 +487,7 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_vis, color="#00E5FF", alpha=0.15)
 
+    # Etiquetas de Fortaleza
     labels_loc = [
         f"{g_loc:.0f} Goles",
         f"{pos_l:.1f}%",
@@ -465,8 +536,9 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
 
 
 def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
+    """Genera el mapa de remates exclusivo de Fortaleza sobre una cancha verde césped táctica."""
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
-    fig.patch.set_facecolor("#1b4332")
+    fig.patch.set_facecolor("#1b4332")  # Verde césped táctico profesional
     ax.set_facecolor("#1b4332")
 
     line_col = "#ffffff"
@@ -480,6 +552,7 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
     rem_l = int(datos.get("remates_local", 20))
     gol_l = int(datos.get("goles_local", 4))
 
+    # Goles (Naranja brillante con borde blanco)
     x_gol_l = np.random.uniform(43, 57, gol_l)
     y_gol_l = np.random.uniform(91, 98, gol_l)
     ax.scatter(
@@ -493,6 +566,7 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
         label=f"Goles ({gol_l})",
     )
 
+    # Remates Fuera / Salvados (Amarillo/Verde neón alto contraste)
     x_rem_l = np.random.uniform(22, 78, max(0, rem_l - gol_l))
     y_rem_l = np.random.uniform(65, 96, max(0, rem_l - gol_l))
     ax.scatter(
@@ -540,6 +614,7 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
 
 
 def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
+    """Genera un gráfico horizontal despejado para evitar colisiones de texto."""
     fig, ax = plt.subplots(figsize=(8, 3.2))
     fig.patch.set_facecolor("#0D0D0D")
     ax.set_facecolor("#0D0D0D")
@@ -1287,6 +1362,7 @@ with tab_admin:
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
                 "📄 Generar Reporte de Análisis PDF (Tagueo CSV / PDF)",
+                "🛠️ Inicializar Base de Datos de Jugadores",
                 "📈 Tablero de Control Financiero (Balance)",
                 "🛡️ 1. Añadir Equipo (GLOBAL)",
                 "👤 2. Agregar Jugador / Papá a un Equipo",
@@ -1442,6 +1518,16 @@ with tab_admin:
                     mime="application/pdf",
                     use_container_width=True,
                 )
+
+        elif opcion_admin == "🛠️ Inicializar Base de Datos de Jugadores":
+            st.write("#### 🛠️ Configuración de Estructura Individual")
+            st.write(
+                "Haz clic en el botón para verificar y crear automáticamente las pestañas de rendimiento individual en tu Google Sheet."
+            )
+            if st.button(
+                "🚀 CREAR PESTAÑAS EN GOOGLE SHEETS", use_container_width=True
+            ):
+                inicializar_pestanas_jugadores()
 
         elif opcion_admin == "🛡️ 1. Añadir Equipo (GLOBAL)":
             nuevo_equipo = st.text_input("Nombre Único del Equipo:")
