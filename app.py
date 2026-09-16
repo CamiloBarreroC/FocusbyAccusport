@@ -1,3 +1,4 @@
+import io
 import json
 import re
 from datetime import datetime, timedelta
@@ -7,6 +8,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import gspread
 import pandas as pd
+from PIL import Image
 import streamlit as st
 
 try:
@@ -189,10 +191,10 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 
 
 # =====================================================================
-# 📑 SANITIZADOR UNICODE Y GENERADOR DE REPORTE PDF
+# 📑 PROCESAMIENTO MULTI-ARCHIVO (PDF Y CSV) Y GENERADOR DE REPORTE
 # =====================================================================
 def sanitizar_texto(texto):
-    """Limpia caracteres fuera del mapa Latin-1 para evitar que FPDF colapse."""
+    """Limpia caracteres fuera del mapa Latin-1 para evitar colapsos en FPDF."""
     if not isinstance(texto, str):
         return str(texto)
     reemplazos = {
@@ -206,97 +208,121 @@ def sanitizar_texto(texto):
     return texto.encode("latin-1", "ignore").decode("latin-1")
 
 
-def procesar_archivo_tagueo(file_obj):
+def obtener_bytes_shot_chart(file_obj):
+    """Convierte el archivo del Shot Chart (sea PDF o PNG/JPG) a bytes de imagen."""
     if file_obj is None:
+        return None
+
+    nombre = file_obj.name.lower()
+    if nombre.endswith(".pdf"):
+        if pdfplumber is None:
+            st.error("Instala pdfplumber en requirements.txt para procesar el PDF del Shot Chart.")
+            return None
+        try:
+            with pdfplumber.open(io.BytesIO(file_obj.getvalue())) as pdf:
+                page = pdf.pages[0]
+                im = page.to_image(resolution=200).original
+                img_byte_arr = io.BytesIO()
+                im.save(img_byte_arr, format="PNG")
+                img_byte_arr.seek(0)
+                return img_byte_arr
+        except Exception as e:
+            st.error(f"Error procesando la imagen del PDF: {e}")
+            return None
+    else:
+        return file_obj
+
+
+def procesar_archivos_tagueo(lista_archivos):
+    """Procesa uno o múltiples archivos CSV/PDF del software de tagueo."""
+    if not lista_archivos:
         return {}
 
-    nombre_archivo = file_obj.name.lower()
+    if not isinstance(lista_archivos, list):
+        lista_archivos = [lista_archivos]
+
     datos = {}
+    texto_consolidado = ""
 
-    if nombre_archivo.endswith(".csv"):
-        try:
-            df = pd.read_csv(file_obj)
-            for _, row in df.iterrows():
-                clave = str(row.iloc[0]).strip().lower()
-                val_local = row.iloc[1] if len(row) > 1 else 0
-                val_visita = row.iloc[2] if len(row) > 2 else 0
+    for file_obj in lista_archivos:
+        nombre = file_obj.name.lower()
+        file_bytes = file_obj.getvalue()
 
-                if "possession" in clave:
-                    datos["pos_local"] = str(val_local)
-                    datos["pos_visita"] = str(val_visita)
-                elif "shots" in clave and "target" not in clave:
-                    datos["remates_local"] = val_local
-                    datos["remates_visita"] = val_visita
-                elif "goals" in clave:
-                    datos["goles_local"] = val_local
-                    datos["goles_visita"] = val_visita
-                elif "passes" in clave and "successful" not in clave:
-                    datos["pases_local"] = val_local
-                    datos["pases_visita"] = val_visita
-                elif "successful passes" in clave:
-                    datos["pases_exitosos_local"] = val_local
-                    datos["pases_exitosos_visita"] = val_visita
-        except Exception as e:
-            st.error(f"Error procesando CSV: {e}")
+        if nombre.endswith(".csv"):
+            try:
+                df = pd.read_csv(io.BytesIO(file_bytes))
+                for _, row in df.iterrows():
+                    clave = str(row.iloc[0]).strip().lower()
+                    val_local = row.iloc[1] if len(row) > 1 else 0
+                    val_visita = row.iloc[2] if len(row) > 2 else 0
 
-    elif nombre_archivo.endswith(".pdf"):
-        if pdfplumber is None:
-            st.warning("⚠️ La librería pdfplumber no está instalada en requirements.txt para procesar PDFs.")
-            return datos
+                    if "possession" in clave:
+                        datos["pos_local"] = str(val_local)
+                        datos["pos_visita"] = str(val_visita)
+                    elif "shots" in clave and "target" not in clave:
+                        datos["remates_local"] = val_local
+                        datos["remates_visita"] = val_visita
+                    elif "goals" in clave:
+                        datos["goles_local"] = val_local
+                        datos["goles_visita"] = val_visita
+                    elif "passes" in clave and "successful" not in clave:
+                        datos["pases_local"] = val_local
+                        datos["pases_visita"] = val_visita
+                    elif "successful passes" in clave:
+                        datos["pases_exitosos_local"] = val_local
+                        datos["pases_exitosos_visita"] = val_visita
+            except Exception as e:
+                st.error(f"Error en CSV {nombre}: {e}")
 
-        try:
-            with pdfplumber.open(file_obj) as pdf:
-                texto_completo = "\n".join(
-                    [p.extract_text() or "" for p in pdf.pages]
-                )
+        elif nombre.endswith(".pdf") and pdfplumber:
+            try:
+                with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                    for p in pdf.pages:
+                        txt = p.extract_text()
+                        if txt:
+                            texto_consolidado += "\n" + txt
+            except Exception as e:
+                st.error(f"Error al leer PDF {nombre}: {e}")
 
-                pos_m = re.search(
-                    r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)",
-                    texto_completo,
-                    re.IGNORECASE,
-                )
-                if pos_m:
-                    datos["pos_local"] = pos_m.group(1)
-                    datos["pos_visita"] = pos_m.group(2)
+    if texto_consolidado:
+        pos_m = re.search(
+            r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)",
+            texto_consolidado,
+            re.IGNORECASE,
+        )
+        if pos_m:
+            datos["pos_local"] = pos_m.group(1)
+            datos["pos_visita"] = pos_m.group(2)
 
-                goles_m = re.search(
-                    r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)",
-                    texto_completo,
-                    re.IGNORECASE,
-                )
-                if goles_m:
-                    datos["goles_local"] = int(goles_m.group(1))
-                    datos["goles_visita"] = int(goles_m.group(2))
+        goles_m = re.search(
+            r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
+        )
+        if goles_m:
+            datos["goles_local"] = int(goles_m.group(1))
+            datos["goles_visita"] = int(goles_m.group(2))
 
-                shots_m = re.search(
-                    r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)",
-                    texto_completo,
-                    re.IGNORECASE,
-                )
-                if shots_m:
-                    datos["remates_local"] = int(shots_m.group(1))
-                    datos["remates_visita"] = int(shots_m.group(2))
+        shots_m = re.search(
+            r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
+        )
+        if shots_m:
+            datos["remates_local"] = int(shots_m.group(1))
+            datos["remates_visita"] = int(shots_m.group(2))
 
-                pases_m = re.search(
-                    r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
-                    texto_completo,
-                    re.IGNORECASE,
-                )
-                if pases_m:
-                    datos["pases_local"] = int(pases_m.group(1))
-                    datos["pases_visita"] = int(pases_m.group(2))
+        pases_m = re.search(
+            r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
+        )
+        if pases_m:
+            datos["pases_local"] = int(pases_m.group(1))
+            datos["pases_visita"] = int(pases_m.group(2))
 
-                sp_m = re.search(
-                    r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
-                    texto_completo,
-                    re.IGNORECASE,
-                )
-                if sp_m:
-                    datos["pases_exitosos_local"] = int(sp_m.group(1))
-                    datos["pases_exitosos_visita"] = int(sp_m.group(2))
-
-        except Exception as e:
-            st.error(f"Error al extraer datos del PDF: {e}")
+        sp_m = re.search(
+            r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
+            texto_consolidado,
+            re.IGNORECASE,
+        )
+        if sp_m:
+            datos["pases_exitosos_local"] = int(sp_m.group(1))
+            datos["pases_exitosos_visita"] = int(sp_m.group(2))
 
     return datos
 
@@ -326,9 +352,9 @@ def generar_pdf_6_paginas(data):
     GRAY_BG = (245, 245, 247)
     TEXT_DARK = (30, 30, 30)
 
-    eq_loc = sanitizar_texto(data['equipo_local'])
-    eq_vis = sanitizar_texto(data['equipo_visita'])
-    fec_str = sanitizar_texto(data['fecha'])
+    eq_loc = sanitizar_texto(data["equipo_local"])
+    eq_vis = sanitizar_texto(data["equipo_visita"])
+    fec_str = sanitizar_texto(data["fecha"])
 
     # PÁGINA 1: PORTADA
     pdf.add_page()
@@ -406,7 +432,9 @@ def generar_pdf_6_paginas(data):
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Lectura general:", ln=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos registrados.")))
+    pdf.multi_cell(
+        0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos registrados."))
+    )
     pdf.ln(8)
 
     pdf.set_font("Helvetica", "B", 12)
@@ -461,8 +489,8 @@ def generar_pdf_6_paginas(data):
         try:
             pdf.image(data["img_shot_chart"], x=20, y=50, w=170)
             pdf.set_y(180)
-        except Exception:
-            pdf.cell(0, 10, "[Error al renderizar imagen del Shot Chart]", ln=True)
+        except Exception as e:
+            pdf.cell(0, 10, f"[Error al renderizar imagen: {e}]", ln=True)
     else:
         pdf.cell(0, 10, "[Mapa de remates no adjuntado]", ln=True)
 
@@ -668,13 +696,15 @@ with tab_admin:
 
             col_doc, col_img = st.columns(2)
             with col_doc:
-                archivo_tagueo = st.file_uploader(
-                    "1. Archivo de Tagueo (PDF o CSV):", type=["csv", "pdf"]
+                archivos_tagueo = st.file_uploader(
+                    "1. Archivos de Tagueo (PDFs o CSV):",
+                    type=["csv", "pdf"],
+                    accept_multiple_files=True,
                 )
             with col_img:
-                archivo_img = st.file_uploader(
-                    "2. Imagen Shot Chart (.png / .jpg):",
-                    type=["png", "jpg", "jpeg"],
+                archivo_img_raw = st.file_uploader(
+                    "2. Mapa Shot Chart (PDF, PNG o JPG):",
+                    type=["png", "jpg", "jpeg", "pdf"],
                 )
 
             col_e1, col_e2, col_f = st.columns(3)
@@ -724,8 +754,9 @@ with tab_admin:
 
             if st.button("🚀 GENERAR Y DESCARGAR PDF DE 6 PÁGINAS", use_container_width=True):
                 datos_extraidos = (
-                    procesar_archivo_tagueo(archivo_tagueo) if archivo_tagueo else {}
+                    procesar_archivos_tagueo(archivos_tagueo) if archivos_tagueo else {}
                 )
+                img_shot_chart = obtener_bytes_shot_chart(archivo_img_raw)
 
                 data_pdf = {
                     "equipo_local": eq_local,
@@ -744,7 +775,7 @@ with tab_admin:
                     "focos_entrenamiento": [
                         x.strip() for x in foc_ent.split(",") if x.strip()
                     ],
-                    "img_shot_chart": archivo_img,
+                    "img_shot_chart": img_shot_chart,
                     **datos_extraidos,
                 }
 
