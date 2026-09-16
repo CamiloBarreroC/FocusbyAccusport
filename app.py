@@ -111,7 +111,7 @@ for key, val in defaults.items():
 
 
 # =====================================================================
-# 🔗 CONEXIONES Y SERVICIOS GOOGLE
+# 🔗 CONEXIONES Y SERVICIOS GOOGLE (CON CACHÉ ANTI-BLOQUEOS)
 # =====================================================================
 @st.cache_resource
 def conectar_google_services():
@@ -809,7 +809,7 @@ def generar_analisis_tactico_gemini(
         }}
         """
 
-        response = client.models.generate_content(
+        response = client.models.generateContent(
             model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -844,16 +844,16 @@ def extraer_datos_jugador_gemini(texto_pdf):
         TEXTO EXTRAÍDO DEL TAGUEO INDIVIDUAL:
         {texto_pdf}
 
-        REGLAS CRÍTICAS DE SUMATORIA Y EXTRACCIÓN DE PASES:
+        REGLAS CRÍTICAS DE SUMATORIA, MINUTOS Y EXTRACCIÓN DE PASES:
         1. Si el texto proviene de varios archivos/tiempos, SUMA todos los valores numéricos de cada acción.
         2. PRESTA EXTREMA ATENCIÓN A LOS PASES: Busca métricas como "Pases Exitosos", "Pases Completados", "Pases Intentados", "Pases Cortos", "Pases Largos" o "Pases Totales".
-        3. Si un jugador registra asistencias o centros, ES MATEMÁTICAMENTE IMPOSIBLE que tenga 0 pases completados. Asegúrate de leer la columna exacta de pases completados e intentados.
+        3. MINUTOS JUGADOS: NO sumes marcas de tiempo de video (timestamps de clips como 01:05, 105s, etc.). Si no figura la duración total jugada explícita, coloca 0 (el usuario podrá ingresarla manualmente).
 
         Responde en formato JSON estricto con la siguiente estructura:
         {{
             "jugador": "Matias Barrero",
             "dorsal": "13",
-            "minutos": 90,
+            "minutos": 0,
             "participaciones": 51,
             "goles": 0,
             "asistencias": 1,
@@ -942,7 +942,7 @@ def generar_scouting_cualitativo_jugador(data_jugador):
         }
 
 
-def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
+def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival, mins_override=None):
     client = obtener_cliente_sheets()
     if not client:
         return False
@@ -955,7 +955,8 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
 
         nom = data_jugador.get("jugador", "Desconocido").strip()
         dor = str(data_jugador.get("dorsal", "0")).strip()
-        mins = int(data_jugador.get("minutos", 90))
+
+        mins = int(mins_override) if mins_override is not None else int(data_jugador.get("minutos", 0))
         part = int(data_jugador.get("participaciones", 0))
         gol = int(data_jugador.get("goles", 0))
         asis = int(data_jugador.get("asistencias", 0))
@@ -2256,13 +2257,15 @@ with tab_admin:
                 accept_multiple_files=True,
             )
 
-            col_j1, col_j2, col_j3 = st.columns(3)
+            col_j1, col_j2, col_j3, col_j4 = st.columns([2, 2, 2, 1.5])
             with col_j1:
                 eq_j = st.text_input("Equipo / Categoría:", value="Fortaleza 2017 B")
             with col_j2:
                 riv_j = st.text_input("Rival del Encuentro:", value="Aurinegro")
             with col_j3:
                 fec_j = st.text_input("Fecha:", value="12/09/2026")
+            with col_j4:
+                mins_manual = st.number_input("Min. Jugados:", value=60, step=5)
 
             if st.button("🚀 INGESTAR METRICAS A GOOGLE SHEETS", use_container_width=True):
                 if files_jugador:
@@ -2272,7 +2275,7 @@ with tab_admin:
 
                         if json_data:
                             exito = procesar_e_ingresar_jugador_db(
-                                json_data, fec_j, eq_j, riv_j
+                                json_data, fec_j, eq_j, riv_j, mins_override=mins_manual
                             )
                             if exito:
                                 st.success(
