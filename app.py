@@ -281,15 +281,16 @@ def inicializar_pestanas_jugadores():
         st.error(f"❌ Error al inicializar pestañas: {e}")
 
 
-def subir_foto_jugador_drive(file_obj, nombre_jugador, equipo):
+def subir_foto_jugador_drive(file_obj, nombre_jugador, dorsal, equipo):
     drive_service = obtener_servicio_drive()
     if not drive_service:
         st.error("❌ No se pudo conectar con Google Drive.")
         return None
 
     try:
+        nombre_limpio = nombre_jugador.replace(' ', '_')
         file_metadata = {
-            "name": f"FOTO_{nombre_jugador.replace(' ', '_')}_{equipo}.jpg",
+            "name": f"FOTO_#{dorsal}_{nombre_limpio}_{equipo}.jpg",
             "mimeType": "image/jpeg",
         }
         media = MediaIoBaseUpload(
@@ -862,8 +863,8 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
         ws_hist = sheet.worksheet("HISTORICO_PARTIDOS")
         id_partido = f"MATCH_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-        nom = data_jugador.get("jugador", "Desconocido")
-        dor = str(data_jugador.get("dorsal", "0"))
+        nom = data_jugador.get("jugador", "Desconocido").strip()
+        dor = str(data_jugador.get("dorsal", "0")).strip()
         mins = int(data_jugador.get("minutos", 90))
         part = int(data_jugador.get("participaciones", 0))
         gol = int(data_jugador.get("goles", 0))
@@ -876,12 +877,17 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
         rec = int(data_jugador.get("recuperaciones", 0))
         duel = int(data_jugador.get("duelos_def_ganados", 0))
 
+        # Buscar si el jugador ya tiene Foto_URL guardada por Nombre o Dorsal
         foto_url = ""
         try:
             ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
             records_acum = ws_acum.get_all_records()
             for r in records_acum:
-                if str(r.get("Jugador", "")).strip().lower() == nom.strip().lower():
+                match_nom = str(r.get("Jugador", "")).strip().lower() == nom.lower()
+                match_dor = str(r.get("Dorsal", "")).strip() == dor
+                match_eq = str(r.get("Equipo", "")).strip().lower() == equipo.strip().lower()
+
+                if (match_nom or (match_dor and match_eq)) and r.get("Foto_URL"):
                     foto_url = r.get("Foto_URL", "")
                     break
         except Exception:
@@ -915,7 +921,13 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
 
         if not df_hist.empty and "Jugador" in df_hist.columns:
             df_hist["Jugador"] = df_hist["Jugador"].astype(str).str.strip()
-            df_jug = df_hist[df_hist["Jugador"] == nom.strip()].copy()
+            df_jug = df_hist[df_hist["Jugador"].str.lower() == nom.lower()].copy()
+
+            if df_jug.empty and "Dorsal" in df_hist.columns:
+                df_jug = df_hist[
+                    (df_hist["Dorsal"].astype(str).str.strip() == dor)
+                    & (df_hist["Equipo"].astype(str).str.strip().str.lower() == equipo.strip().lower())
+                ].copy()
 
             pj = len(df_jug)
             m_tot = int(pd.to_numeric(df_jug["Minutos_Jugados"], errors="coerce").sum())
@@ -929,9 +941,18 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
             prec_p = f"{round((pc_tot / max(1, pi_tot)) * 100, 1)}%"
             rec_tot = int(pd.to_numeric(df_jug["Recuperaciones"], errors="coerce").sum())
 
+            # Búsqueda de fila existente por Nombre o por Dorsal+Equipo
             cell_found = None
             try:
-                cell_found = ws_acum.find(nom)
+                records = ws_acum.get_all_records()
+                for idx, r in enumerate(records, start=2):
+                    r_nom = str(r.get("Jugador", "")).strip().lower()
+                    r_dor = str(r.get("Dorsal", "")).strip()
+                    r_eq = str(r.get("Equipo", "")).strip().lower()
+
+                    if r_nom == nom.lower() or (r_dor == dor and r_eq == equipo.strip().lower()):
+                        cell_found = idx
+                        break
             except Exception:
                 cell_found = None
 
@@ -953,7 +974,7 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
             ]
 
             if cell_found:
-                ws_acum.update(f"A{cell_found.row}:N{cell_found.row}", [fila_acum])
+                ws_acum.update(f"A{cell_found}:N{cell_found}", [fila_acum])
             else:
                 ws_acum.append_row(fila_acum)
 
@@ -1760,17 +1781,19 @@ with tab_admin:
                 "Selecciona imagen del jugador (JPG / PNG):", type=["jpg", "jpeg", "png"]
             )
 
-            col_f1, col_f2 = st.columns(2)
+            col_f1, col_f2, col_f3 = st.columns([2, 1, 2])
             with col_f1:
                 nom_foto = st.text_input("Nombre Completo del Jugador:")
             with col_f2:
+                dor_foto = st.text_input("Dorsal / #:", value="13")
+            with col_f3:
                 eq_foto = st.text_input("Equipo / Categoría:", value="Fortaleza 2017 B")
 
             if st.button("💾 GUARDAR FOTO EN DRIVE Y GOOGLE SHEETS", use_container_width=True):
-                if foto_file and nom_foto:
+                if foto_file and (nom_foto or dor_foto):
                     with st.spinner("Subiendo foto a Google Drive..."):
                         url_foto = subir_foto_jugador_drive(
-                            foto_file, nom_foto.strip(), eq_foto.strip()
+                            foto_file, nom_foto.strip(), dor_foto.strip(), eq_foto.strip()
                         )
                         if url_foto:
                             client = obtener_cliente_sheets()
@@ -1778,20 +1801,32 @@ with tab_admin:
                                 sheet = client.open_by_key(CONFIG_SHEET_ID)
                                 ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
                                 try:
-                                    cell_f = ws_acum.find(nom_foto.strip())
-                                    if cell_f:
-                                        ws_acum.update_cell(cell_f.row, 14, url_foto)
+                                    records = ws_acum.get_all_records()
+                                    target_row = None
+                                    for idx, r in enumerate(records, start=2):
+                                        r_nom = str(r.get("Jugador", "")).strip().lower()
+                                        r_dor = str(r.get("Dorsal", "")).strip()
+                                        r_eq = str(r.get("Equipo", "")).strip().lower()
+
+                                        if (nom_foto and r_nom == nom_foto.strip().lower()) or (
+                                            r_dor == dor_foto.strip() and r_eq == eq_foto.strip().lower()
+                                        ):
+                                            target_row = idx
+                                            break
+
+                                    if target_row:
+                                        ws_acum.update_cell(target_row, 14, url_foto)
                                         st.success(
-                                            f"📸 Foto de **{nom_foto}** guardada y vinculada exitosamente."
+                                            f"📸 Foto de **{nom_foto or ('#' + dor_foto)}** guardada y vinculada exitosamente."
                                         )
                                     else:
                                         st.info(
-                                            f"Foto subida a Drive. La URL se vinculará automáticamente cuando se ingeste el primer partido de **{nom_foto}**."
+                                            f"Foto subida a Drive. La URL se vinculará automáticamente cuando se ingeste el primer partido de **{nom_foto or ('#' + dor_foto)}**."
                                         )
                                 except Exception as e:
                                     st.error(f"Error al actualizar celda: {e}")
                 else:
-                    st.warning("⚠️ Completa el nombre del jugador y selecciona una foto.")
+                    st.warning("⚠️ Completa al menos el nombre o dorsal del jugador y selecciona una foto.")
 
         elif opcion_admin == "🛠️ Inicializar Base de Datos de Jugadores":
             st.write("#### 🛠️ Configuración de Estructura Individual")
