@@ -757,8 +757,32 @@ def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
 
 
 # =====================================================================
-# 🤖 MOTOR ACCUS-IA VISUAL MULTIMODAL
+# 🤖 MOTOR ACCUS-IA HÍBRIDO (REGEX + VISION)
 # =====================================================================
+def parse_hudl_stats_regex(texto_crudo):
+    """Extrae determinísticamente los valores del reporte Hudl usando patrones bilingües de texto."""
+    stats = {}
+    txt_norm = re.sub(r"\s+", " ", texto_crudo)
+
+    p_shots = re.search(r"(?:Shots|Remates|Disparos)\s+(\d+)", txt_norm, re.IGNORECASE)
+    p_ontarget = re.search(r"(?:On Target|A Puerta|Al Arco)\s+(\d+)", txt_norm, re.IGNORECASE)
+    p_crosses = re.search(r"(?:Crosses|Centros)\s+(\d+)", txt_norm, re.IGNORECASE)
+    p_passes = re.search(r"(?:Successful Passes|Pases Exitosos|Pases Completados)\s+(\d+)", txt_norm, re.IGNORECASE)
+    p_tot_passes = re.search(r"(?:Passes|Pases Totales|Pases Intentados)\s+(\d+)", txt_norm, re.IGNORECASE)
+    p_goles = re.search(r"(?:Goals|Goles)\s+(\d+)", txt_norm, re.IGNORECASE)
+    p_asist = re.search(r"(?:Assists|Asistencias)\s+(\d+)", txt_norm, re.IGNORECASE)
+
+    if p_shots: stats["remates_totales"] = int(p_shots.group(1))
+    if p_ontarget: stats["remates_a_puerta"] = int(p_ontarget.group(1))
+    if p_crosses: stats["centros"] = int(p_crosses.group(1))
+    if p_passes: stats["pases_completados"] = int(p_passes.group(1))
+    if p_tot_passes: stats["pases_intentados"] = int(p_tot_passes.group(1))
+    if p_goles: stats["goles"] = int(p_goles.group(1))
+    if p_asist: stats["asistencias"] = int(p_asist.group(1))
+
+    return stats
+
+
 def generar_analisis_tactico_gemini(
     texto_partido, equipo_local, equipo_visita
 ):
@@ -829,12 +853,27 @@ def generar_analisis_tactico_gemini(
 
 
 def extraer_datos_jugador_gemini(files_jugador):
-    """Procesa e inspecciona los PDFs adjuntos NATIVAMENTE a nivel visual reconociendo etiquetas en inglés y español."""
+    """Procesa e inspecciona los PDFs mediante el lector híbrido RegEx + Gemini Vision."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
             st.error("⚠️ No se encontró GEMINI_API_KEY.")
             return None
 
+        # 1. Extracción Determinista previa con pdfplumber
+        texto_acumulado = ""
+        if pdfplumber:
+            for file_obj in files_jugador:
+                file_bytes = file_obj.getvalue()
+                try:
+                    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                        for page in pdf.pages:
+                            texto_acumulado += (page.extract_text() or "") + "\n"
+                except Exception:
+                    pass
+
+        stats_regex = parse_hudl_stats_regex(texto_acumulado)
+
+        # 2. Extracción mediante Gemini Multimodal
         api_key = st.secrets["GEMINI_API_KEY"]
         client = genai.Client(api_key=api_key)
 
@@ -865,7 +904,7 @@ def extraer_datos_jugador_gemini(files_jugador):
 
         REGLAS CRÍTICAS:
         1. SUMA los valores numéricos de todas las páginas y archivos adjuntos si hay más de uno.
-        2. Si ves por ejemplo: "Passes: 10" y "Successful Passes: 6 (60%)", entonce "pases_intentados" = 10 y "pases_completados" = 6.
+        2. Si ves "Passes: 10" y "Successful Passes: 6 (60%)", entonces "pases_intentados" = 10 y "pases_completados" = 6.
         3. Si ves "Crosses: 8", entonces "centros" = 8.
         4. "minutos": Pon 0 (se configurará manualmente por el usuario).
 
@@ -896,7 +935,15 @@ def extraer_datos_jugador_gemini(files_jugador):
                 temperature=0.1,
             ),
         )
-        return json.loads(response.text)
+
+        res_json = json.loads(response.text)
+
+        # 3. FUSIÓN HÍBRIDA: Reemplazar ceros de la IA con los datos reales encontrados por RegEx
+        for k, v in stats_regex.items():
+            if v > 0:
+                res_json[k] = v
+
+        return res_json
     except Exception as e:
         st.error(f"❌ Error al procesar reporte del jugador con AccusIA: {e}")
         return None
@@ -2330,7 +2377,7 @@ with tab_admin:
 
             if st.button("🚀 INGESTAR METRICAS A GOOGLE SHEETS", use_container_width=True):
                 if files_jugador:
-                    with st.spinner("AccusIA está analizando visualmente las páginas del reporte..."):
+                    with st.spinner("AccusIA está analizando las métricas del reporte..."):
                         json_data = extraer_datos_jugador_gemini(files_jugador)
 
                         if json_data:
