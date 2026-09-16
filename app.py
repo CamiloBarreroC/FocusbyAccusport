@@ -639,6 +639,8 @@ def sanitizar_texto(texto):
         "🏆": "",
         "💵": "",
         "💳": "",
+        "★": "*",
+        "⭐": "*",
     }
     for origen, destino in reemplazos.items():
         texto = texto.replace(origen, destino)
@@ -993,7 +995,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     ]
     for term, desc in glosario_items:
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, f"- {term}: {desc}")
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {term}: {desc}"))
 
     # PÁGINA 6: CONCLUSIONES Y JUGADORES DESTACADOS
     pdf.add_page()
@@ -1014,10 +1016,10 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         pdf.cell(0, 6, "Jugadores Destacados del Partido:", ln=True)
         pdf.set_font("Helvetica", "", 10)
         for jug in destacados:
-            nom = sanitizar_texto(jug.get("nombre", "Jugador"))
-            apo = sanitizar_texto(jug.get("aporte", "Gran rendimiento"))
+            nom = jug.get("nombre", "Jugador")
+            apo = jug.get("aporte", "Gran rendimiento")
             pdf.set_x(12)
-            pdf.multi_cell(0, 5, f"★ {nom} - {apo}")
+            pdf.multi_cell(0, 5, sanitizar_texto(f"* {nom} - {apo}"))
             pdf.ln(1)
         pdf.ln(3)
 
@@ -1027,7 +1029,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_conservar", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, f"[OK] {sanitizar_texto(asp)}")
+        pdf.multi_cell(0, 5, sanitizar_texto(f"[OK] {asp}"))
         pdf.ln(1)
 
     pdf.ln(2)
@@ -1037,7 +1039,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_corregir", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, f"[X] {sanitizar_texto(asp)}")
+        pdf.multi_cell(0, 5, sanitizar_texto(f"[X] {asp}"))
         pdf.ln(1)
 
     pdf.ln(2)
@@ -1047,7 +1049,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 10)
     for foc in data.get("focos_entrenamiento", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, f"> {sanitizar_texto(foc)}")
+        pdf.multi_cell(0, 5, sanitizar_texto(f"> {foc}"))
         pdf.ln(1)
 
     return bytes(pdf.output())
