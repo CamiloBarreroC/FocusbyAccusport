@@ -829,7 +829,7 @@ def generar_analisis_tactico_gemini(
 
 
 def extraer_datos_jugador_gemini(files_jugador):
-    """Procesa e inspecciona los PDFs adjuntos NATIVAMENTE a nivel visual."""
+    """Procesa e inspecciona los PDFs adjuntos NATIVAMENTE a nivel visual reconociendo etiquetas en inglés y español."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
             st.error("⚠️ No se encontró GEMINI_API_KEY.")
@@ -852,29 +852,38 @@ def extraer_datos_jugador_gemini(files_jugador):
         Actúa como especialista en analítica de datos deportivos de AccuSport Colombia.
         Analiza VISUALMENTE las páginas de los reportes PDF adjuntos (reportes de tagueo de Hudl/Focus).
 
-        Lee con máxima precisión cada tabla, infografía e icono presente en los documentos.
+        MAPPING BILINGÜE OBLIGATORIO DE MÉTRICAS (HUDL / FOCUS):
+        - "Goals" o "Goles" -> extrae en "goles"
+        - "Assists" o "Asistencias" -> extrae en "asistencias"
+        - "Shots" o "Remates Totales" -> extrae en "remates_totales"
+        - "On Target" o "A Puerta" -> extrae el número entero de disparos a puerta en "remates_a_puerta"
+        - "Crosses" o "Centros" -> extrae en "centros"
+        - "Passes" o "Pases" -> extrae el total intentado en "pases_intentados"
+        - "Successful Passes" o "Pases Exitosos" -> extrae el número de pases completados en "pases_completados"
+        - "Recoveries" / "Tackles" / "Recuperaciones" -> extrae en "recuperaciones"
+        - "Duels Won" / "Duelos Defensivos" -> extrae en "duelos_def_ganados"
 
-        REGLAS CRÍTICAS DE LECTURA VISUAL Y SUMATORIA:
-        1. SUMA los valores numéricos de todas las páginas y archivos proporcionados.
-        2. PASES COMPLETADOS Y INTENTADOS: Busca visualmente las filas o cajas etiquetadas como "Passes", "Pases", "Pases Exitosos", "Pases Intentados" o relaciones "X/Y". No omitas esta fila ni la confundas con ceros.
-        3. CENTROS Y ASISTENCIAS: Lee las cajas de "Crosses", "Centros", "Assists" o "Asistencias".
-        4. MINUTOS JUGADOS: Coloca 0 (se sobreescribirá con la entrada manual del usuario).
+        REGLAS CRÍTICAS:
+        1. SUMA los valores numéricos de todas las páginas y archivos adjuntos si hay más de uno.
+        2. Si ves por ejemplo: "Passes: 10" y "Successful Passes: 6 (60%)", entonce "pases_intentados" = 10 y "pases_completados" = 6.
+        3. Si ves "Crosses: 8", entonces "centros" = 8.
+        4. "minutos": Pon 0 (se configurará manualmente por el usuario).
 
-        Responde en formato JSON estricto con la siguiente estructura:
+        Responde en formato JSON estricto con la siguiente estructura exacta:
         {
-            "jugador": "Matias Barrero",
+            "jugador": "Barrero",
             "dorsal": "13",
             "minutos": 0,
             "participaciones": 51,
             "goles": 0,
-            "asistencias": 1,
-            "remates_totales": 12,
-            "remates_a_puerta": 5,
+            "asistencias": 0,
+            "remates_totales": 2,
+            "remates_a_puerta": 0,
             "centros": 8,
-            "pases_intentados": 25,
-            "pases_completados": 18,
-            "recuperaciones": 3,
-            "duelos_def_ganados": 2
+            "pases_intentados": 10,
+            "pases_completados": 6,
+            "recuperaciones": 0,
+            "duelos_def_ganados": 0
         }
         """
         contents.append(prompt)
