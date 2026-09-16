@@ -209,7 +209,6 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 # 📊 GENERADORES NATIVOS DE GRÁFICOS TÁCTICOS (MATPLOTLIB / CYBER-TECH)
 # =====================================================================
 def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
-    """Genera un radar chart ampliado, legible y con etiquetas numéricas exactas en los vértices."""
     categorias = [
         "Eficacia Gol",
         "Posesión %",
@@ -304,7 +303,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_vis, color="#888888", alpha=0.2)
 
-    # Etiquetas numéricas explícitas
     labels_loc = [
         f"{g_loc:.0f} Goles",
         f"{pos_l:.1f}%",
@@ -347,22 +345,16 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
 
 
 def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
-    """Genera el mapa de remates nativo en la cancha en fondo oscuro sin logos de Hudl ni textos en inglés."""
     fig, ax = plt.subplots(figsize=(7, 4.5))
     fig.patch.set_facecolor("#0D0D0D")
     ax.set_facecolor("#0D0D0D")
 
-    # Dibujo de Media Cancha
     ax.plot([0, 100, 100, 0, 0], [0, 0, 100, 100, 0], color="#FF5500", lw=2)
     ax.plot([0, 100], [50, 50], color="#333333", lw=1)
-    # Área grande
     ax.plot([20, 80, 80, 20, 20], [100, 100, 70, 70, 100], color="#444444", lw=1.5)
-    # Área chica
     ax.plot([35, 65, 65, 35, 35], [100, 100, 88, 88, 100], color="#444444", lw=1)
-    # Arco
     ax.plot([42, 58], [100, 100], color="#FF5500", lw=4)
 
-    # Simulación/Mapeo de remates según datos extraídos
     np.random.seed(42)
     rem_l = int(datos.get("remates_local", 20))
     gol_l = int(datos.get("goles_local", 4))
@@ -370,7 +362,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
     rem_v = int(datos.get("remates_visita", 34))
     gol_v = int(datos.get("goles_visita", 2))
 
-    # Puntos Local (Naranja)
     x_gol_l = np.random.uniform(43, 57, gol_l)
     y_gol_l = np.random.uniform(92, 99, gol_l)
     ax.scatter(
@@ -395,7 +386,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
         label=f"Remate {equipo_local}",
     )
 
-    # Puntos Visitante (Gris Plata)
     x_gol_v = np.random.uniform(40, 60, gol_v)
     y_gol_v = np.random.uniform(88, 98, gol_v)
     ax.scatter(
@@ -421,7 +411,7 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
     )
 
     plt.title(
-        "MAPA DE REMATES Y DEFINICIÓN (100% EN ESPAÑOL)",
+        "MAPA DE REMATES Y DEFINICIÓN",
         color="white",
         fontsize=11,
         weight="bold",
@@ -454,24 +444,20 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
 
 
 def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
-    """Genera la gráfica de distribución por tercios de cancha en español sin capturas crudas."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 3.5))
     fig.patch.set_facecolor("#0D0D0D")
 
     tercios = ["Tercio Defensivo", "Tercio Medio", "Tercio Ofensivo"]
 
-    # Datos Local
     pases_loc = [29, 30, 28]
     ex_loc = [16, 24, 14]
 
-    # Datos Visitante
     pases_vis = [28, 45, 30]
     ex_vis = [22, 33, 18]
 
     x = np.arange(len(tercios))
     width = 0.35
 
-    # Grafico Local
     ax1.set_facecolor("#0D0D0D")
     ax1.bar(
         x - width / 2,
@@ -499,7 +485,6 @@ def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
     ax1.spines["right"].set_visible(False)
     ax1.spines["left"].set_color("#444444")
 
-    # Grafico Visitante
     ax2.set_facecolor("#0D0D0D")
     ax2.bar(
         x - width / 2,
@@ -544,7 +529,7 @@ def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
 
 
 # =====================================================================
-# 🤖 MOTOR GEMINI IA MULTIMODAL Y ANALIZADOR TÁCTICO
+# 🤖 MOTOR ACCUS-IA Y DEPURACIÓN DE NOMBRES/SIGLAS
 # =====================================================================
 def generar_analisis_tactico_gemini(
     texto_partido, equipo_local, equipo_visita
@@ -560,15 +545,19 @@ def generar_analisis_tactico_gemini(
         client = genai.Client(api_key=api_key)
 
         prompt = f"""
-        Actúa como Director Técnico y Analista Táctico de fútbol profesional.
+        Actúa como Director Técnico y Analista Táctico de fútbol profesional de la firma AccuSport.
         Analiza el siguiente reporte numérico y de eventos extraído de un archivo de tagueo de partido entre {equipo_local} (Local) y {equipo_visita} (Visitante):
+
+        REGLA CRÍTICA DE NOMBRES Y NOMENCLATURA:
+        - Usa EXCLUSIVAMENTE los nombres oficiales: "{equipo_local}" para el local y "{equipo_visita}" para el visitante.
+        - Queda ESTRICTAMENTE PROHIBIDO usar siglas, acrónimos o códigos del tagueo como "CBC", "AUR", "HOM", "AWY" o abreviaciones. Refiérete al equipo siempre con su nombre completo: "{equipo_local}".
 
         TEXTO EXTRAÍDO DEL TAGUEO:
         {texto_partido}
 
         Instrucciones:
         1. Extrae con precisión las estadísticas numéricas del encuentro.
-        2. Si hay nombres de jugadores individuales en el texto, extrae hasta 3 jugadores destacados con sus datos (Goles, Pases o Minutos).
+        2. Si hay nombres de jugadores individuales en el texto, extrae hasta 3 jugadores destacados con sus datos.
         3. Realiza un análisis táctico profesional basado estricta y únicamente en los datos numéricos encontrados.
 
         Responde en formato JSON estricto con las siguientes claves exactas:
@@ -606,9 +595,13 @@ def generar_analisis_tactico_gemini(
             ),
         )
 
-        return json.loads(response.text)
+        res_text = response.text
+        res_text = re.sub(r"\bCBC\b", equipo_local, res_text)
+        res_text = re.sub(r"\bAUR\b", equipo_visita, res_text)
+
+        return json.loads(res_text)
     except Exception as e:
-        st.error(f"❌ Error al consultar a Gemini IA: {e}")
+        st.error(f"❌ Error al consultar a AccusIA: {e}")
         return None
 
 
@@ -684,20 +677,26 @@ def extraer_datos_y_graficos(lista_archivos):
 
 
 # =====================================================================
-# 📑 GENERADOR FPDF CON MÁRGENES Y TIPOGRAFÍA CORREGIDOS
+# 📑 GENERADOR FPDF CON MARCA EN EL PIE DE PÁGINA (POWERED BY ACCUSIA)
 # =====================================================================
 class PDFReporteFocus(FPDF):
 
     def footer(self):
         if self.page_no() > 1:
             self.set_y(-15)
+            # Pie de página izquierdo: Powered by AccusIA
+            self.set_font("Helvetica", "B", 8)
+            self.set_text_color(255, 85, 0)
+            self.cell(80, 10, "Powered by AccusIA", align="L")
+
+            # Pie de página derecho: FOCUS by AccuSport | Página X
             self.set_font("Helvetica", "", 8)
             self.set_text_color(128, 128, 128)
             self.cell(
                 0,
                 10,
-                f"FOCUS by AccuSport | Reporte de análisis                      Página {self.page_no()}",
-                align="C",
+                f"FOCUS by AccuSport | Página {self.page_no()}",
+                align="R",
             )
 
 
@@ -971,7 +970,6 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.cell(0, 6, "Síntesis técnica e hitos individuales", ln=True)
     pdf.ln(6)
 
-    # Jugadores destacados
     destacados = data.get("jugadores_destacados", [])
     if destacados:
         pdf.set_font("Helvetica", "B", 11)
@@ -1164,12 +1162,12 @@ with tab_admin:
                 )
 
             if st.button(
-                "🤖 GENERAR ANÁLISIS TÁCTICO AUTOMÁTICO CON GEMINI IA",
+                "⚡ GENERAR ANÁLISIS TÁCTICO AUTOMÁTICO CON ACCUSIA",
                 use_container_width=True,
             ):
                 if archivos_tagueo:
                     with st.spinner(
-                        "Gemini IA está procesando el reporte completo del partido..."
+                        "AccusIA está procesando el reporte completo del partido..."
                     ):
                         texto_crudo, _ = extraer_datos_y_graficos(
                             archivos_tagueo
@@ -1205,7 +1203,7 @@ with tab_admin:
                                 analisis_ia.get("focos_entrenamiento", [])
                             )
                             st.success(
-                                "✨ ¡Análisis completado exitosamente por Gemini!"
+                                "✨ ¡Análisis completado exitosamente por AccusIA!"
                             )
                 else:
                     st.warning(
@@ -1246,7 +1244,6 @@ with tab_admin:
             ):
                 datos_finales = st.session_state.get("stats_partido", {})
 
-                # Generación de las 3 gráficas nativas en Python
                 buf_radar = generar_radar_chart_tactico(
                     datos_finales, eq_local, eq_visita
                 )
