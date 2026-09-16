@@ -351,7 +351,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
 
 
 def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
-    """Genera el mapa de remates EXCLUSIVO de Fortaleza sobre una cancha verde táctica profesional."""
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     fig.patch.set_facecolor("#0B1C10")
     ax.set_facecolor("#0B1C10")
@@ -427,7 +426,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
 
 
 def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
-    """Genera gráfico horizontal por zonas tácticas de la cancha para el equipo analizado."""
     fig, ax = plt.subplots(figsize=(8, 3.2))
     fig.patch.set_facecolor("#0D0D0D")
     ax.set_facecolor("#0D0D0D")
@@ -621,6 +619,12 @@ def sanitizar_texto(texto):
         "⭐": "*",
         "|": "-",
         "рего": "pero",
+        "—": "-",
+        "–": "-",
+        "“": '"',
+        "”": '"',
+        "’": "'",
+        "‘": "'",
     }
     for origen, destino in reemplazos.items():
         texto = texto.replace(origen, destino)
@@ -659,7 +663,7 @@ def extraer_datos_y_graficos(lista_archivos):
 
 
 # =====================================================================
-# 📑 GENERADOR FPDF CON MARCA EN EL PIE DE PÁGINA (POWERED BY ACCUSIA)
+# 📑 GENERADOR FPDF CON MARCA EN EL PIE DE PÁGINA
 # =====================================================================
 class PDFReporteFocus(FPDF):
 
@@ -751,7 +755,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C"
     )
 
-    # PÁGINA 2: ANÁLISIS GENERAL Y MOSAICO DE METRICAS
+    # PÁGINA 2: ANÁLISIS GENERAL
     pdf.add_page()
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
@@ -835,10 +839,10 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 10)
     for conc in data.get("conclusiones", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, f"• {sanitizar_texto(conc)}")
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {conc}"))
         pdf.ln(2)
 
-    # PÁGINA 3: COMPARATIVO Y RADAR REESCALADO
+    # PÁGINA 3: COMPARATIVO Y RADAR
     pdf.add_page()
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
@@ -980,9 +984,9 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     ]
     for term, desc in glosario_items:
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, sanitizar_texto(f"• {term}: {desc}"))
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {term}: {desc}"))
 
-    # PÁGINA 6: CONCLUSIONES, JUGADORES Y NOTA DE CREDITO INSTITUCIONAL
+    # PÁGINA 6: CONCLUSIONES, JUGADORES Y NOTA INSTITUCIONAL
     pdf.add_page()
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
@@ -1014,7 +1018,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_conservar", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, sanitizar_texto(f"• {asp}"))
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {asp}"))
         pdf.ln(1)
 
     pdf.ln(2)
@@ -1024,7 +1028,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_corregir", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, sanitizar_texto(f"• {asp}"))
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {asp}"))
         pdf.ln(1)
 
     pdf.ln(2)
@@ -1034,10 +1038,10 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 10)
     for foc in data.get("focos_entrenamiento", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, sanitizar_texto(f"• {foc}"))
+        pdf.multi_cell(0, 5, sanitizar_texto(f"- {foc}"))
         pdf.ln(1)
 
-    # 📜 NOTA DE CRÉDITO INSTITUCIONAL AL FINAL DEL INFORME
+    # NOTA DE CRÉDITO INSTITUCIONAL AL FINAL DEL INFORME
     pdf.ln(8)
     pdf.set_fill_color(*DARK)
     pdf.rect(12, pdf.get_y(), 186, 16, "F")
