@@ -15,7 +15,6 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
 from PIL import Image
 import streamlit as st
 
@@ -112,7 +111,7 @@ for key, val in defaults.items():
 
 
 # =====================================================================
-# 🔗 CONEXIONES Y SERVICIOS GOOGLE (CON CACHÉ ANTI-BLOQUEOS)
+# 🔗 CONEXIONES Y SERVICIOS GOOGLE
 # =====================================================================
 @st.cache_resource
 def conectar_google_services():
@@ -146,7 +145,6 @@ def obtener_servicio_calendar():
 
 @st.cache_data(ttl=60)
 def obtener_datos_pestana(nombre_pestana):
-    """Guarda los datos en RAM durante 60s para evitar la saturación de Google Sheets al mover sliders."""
     client = obtener_cliente_sheets()
     if client:
         try:
@@ -304,7 +302,7 @@ def procesar_foto_jugador_base64(file_obj):
 # =====================================================================
 def generar_mapa_calor_manual(matriz_3x3, nombre_jugador):
     """Genera un Mapa de Calor suavizado sobre una cancha verde táctica."""
-    fig, ax = plt.subplots(figsize=(7.5, 4.5))
+    fig, ax = plt.subplots(figsize=(6.5, 3.8))
     fig.patch.set_facecolor("#1b4332")
     ax.set_facecolor("#1b4332")
 
@@ -329,9 +327,9 @@ def generar_mapa_calor_manual(matriz_3x3, nombre_jugador):
     plt.title(
         f"MAPA DE INFLUENCIA Y CALOR TÁCTICO: {nombre_jugador.upper()}",
         color="white",
-        fontsize=9.5,
+        fontsize=8.5,
         weight="bold",
-        pad=10,
+        pad=8,
     )
     plt.xlim(-2, 102)
     plt.ylim(-2, 102)
@@ -841,13 +839,15 @@ def extraer_datos_jugador_gemini(texto_pdf):
 
         prompt = f"""
         Actúa como especialista en analítica de datos deportivos de AccuSport Colombia.
-        Extrae la información individual del siguiente texto extraído de uno o varios reportes de tagueo de jugador (PDF de Hudl/Focus):
+        Analiza el siguiente texto de uno o varios reportes de tagueo individual de jugador (PDFs de Hudl/Focus).
 
         TEXTO EXTRAÍDO DEL TAGUEO INDIVIDUAL:
         {texto_pdf}
 
-        Instrucciones:
-        Consolida y extrae los valores exactos encontrados en el reporte. Si alguna variable no aparece, pon 0 o 'N/A'.
+        REGLAS CRÍTICAS DE SUMATORIA Y EXTRACCIÓN DE PASES:
+        1. Si el texto proviene de varios archivos/tiempos, SUMA todos los valores numéricos de cada acción.
+        2. PRESTA EXTREMA ATENCIÓN A LOS PASES: Busca métricas como "Pases Exitosos", "Pases Completados", "Pases Intentados", "Pases Cortos", "Pases Largos" o "Pases Totales".
+        3. Si un jugador registra asistencias o centros, ES MATEMÁTICAMENTE IMPOSIBLE que tenga 0 pases completados. Asegúrate de leer la columna exacta de pases completados e intentados.
 
         Responde en formato JSON estricto con la siguiente estructura:
         {{
@@ -859,11 +859,11 @@ def extraer_datos_jugador_gemini(texto_pdf):
             "asistencias": 1,
             "remates_totales": 12,
             "remates_a_puerta": 5,
-            "centros": 2,
-            "pases_intentados": 10,
-            "pases_completados": 8,
-            "recuperaciones": 0,
-            "duelos_def_ganados": 0
+            "centros": 8,
+            "pases_intentados": 25,
+            "pases_completados": 18,
+            "recuperaciones": 3,
+            "duelos_def_ganados": 2
         }}
         """
 
@@ -882,19 +882,19 @@ def extraer_datos_jugador_gemini(texto_pdf):
 
 
 def generar_scouting_cualitativo_jugador(data_jugador):
-    """Genera un análisis de scouting cualitativo personalizado con AccusIA."""
+    """Genera un análisis de scouting cualitativo personalizado con AccusIA con guardarraíl de consistencia."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
             return {
                 "puntos_fuertes": [
-                    "Buen volumen de juego",
-                    "Aporte dinámico",
+                    "Buen volumen de participación ofensiva",
+                    "Constante búsqueda de asociación en ataque",
                 ],
                 "aspectos_mejorar": [
-                    "Incrementar precisión de remate",
-                    "Ajustar perfil defensivo",
+                    "Incrementar efectividad en la definición",
+                    "Optimizar perfilamiento en duelo individual",
                 ],
-                "conclusion_scouting": "Jugador con proyección constante dentro del modelo táctico.",
+                "conclusion_scouting": "Jugador dinámico con constante vocación ofensiva y aporte en la construcción de juego.",
             }
 
         api_key = st.secrets["GEMINI_API_KEY"]
@@ -902,11 +902,14 @@ def generar_scouting_cualitativo_jugador(data_jugador):
 
         prompt = f"""
         Actúa como Senior Scout y Analista de Rendimiento Individual para AccuSport Colombia.
-        Elabora un diagnóstico técnico del jugador {data_jugador.get('Jugador', data_jugador.get('jugador', 'Jugador'))} con base en sus métricas de partido:
-        - Participaciones: {data_jugador.get('Participaciones_Totales', data_jugador.get('participaciones', 0))}
+        Elabora un diagnóstico técnico del jugador {data_jugador.get('Jugador', data_jugador.get('jugador', 'Jugador'))} con base en sus métricas reales de partido:
+        - Participaciones Totales: {data_jugador.get('Participaciones_Totales', data_jugador.get('participaciones', 0))}
         - Goles: {data_jugador.get('Goles', data_jugador.get('goles', 0))}, Asistencias: {data_jugador.get('Asistencias', data_jugador.get('asistencias', 0))}
         - Remates Totales: {data_jugador.get('Remates_Totales', data_jugador.get('remates_totales', 0))} (A Puerta: {data_jugador.get('Remates_A_Puerta', data_jugador.get('remates_a_puerta', 0))})
         - Pases Completados: {data_jugador.get('Pases_Completados', data_jugador.get('pases_completados', 0))} de {data_jugador.get('Pases_Intentados', data_jugador.get('pases_intentados', 0))}
+        - Centros al Área: {data_jugador.get('Centros', data_jugador.get('centros', 0))}
+
+        REGLA DE ORO: Analiza SOLAMENTE los números provistos arriba. No inventes falencias que contradigan las métricas reales.
 
         Responde en JSON estricto:
         {{
@@ -928,14 +931,14 @@ def generar_scouting_cualitativo_jugador(data_jugador):
     except Exception:
         return {
             "puntos_fuertes": [
-                "Intensidad de participación",
-                "Compromiso en fase de gestación",
+                "Intensidad y alto volumen de participación",
+                "Compromiso directo en la gestación ofensiva",
             ],
             "aspectos_mejorar": [
-                "Efectividad en zona de definición",
-                "Consistencia en duelo individual",
+                "Efectividad final en disparo a puerta",
+                "Consistencia en la toma de decisiones bajo presión",
             ],
-            "conclusion_scouting": "Rendimiento positivo con oportunidades de mejora en la toma de decisiones del último tercio.",
+            "conclusion_scouting": "Rendimiento sumamente activo que genera permanente sensación de peligro y continuidad en ataque.",
         }
 
 
@@ -947,7 +950,6 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
     try:
         sheet = client.open_by_key(CONFIG_SHEET_ID)
 
-        # 1. Guardar en HISTORICO_PARTIDOS
         ws_hist = sheet.worksheet("HISTORICO_PARTIDOS")
         id_partido = f"MATCH_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -1002,7 +1004,6 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
         ]
         ws_hist.append_row(fila_hist)
 
-        # 2. Recalcular / Upsert en ACUMULADO_TEMPORADA
         ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
         df_hist = pd.DataFrame(ws_hist.get_all_records())
 
@@ -1552,12 +1553,29 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     GRAY_BG = (245, 245, 247)
     TEXT_DARK = (30, 30, 30)
 
-    # --- PÁGINA 1: FICHA DE PARTIDO Y MAPA DE CALOR ---
+    # --- PÁGINA 1: FICHA DE PARTIDO Y METRICAS ---
     pdf.add_page()
     pdf.set_fill_color(*DARK)
     pdf.rect(12, 12, 186, 35, "F")
 
+    # Búsqueda Heredada de Foto
     foto_b64 = data_jug.get("Foto_URL", "")
+    nom_jug = data_jug.get("Jugador", data_jug.get("jugador", "Jugador")).strip()
+    dor_jug = data_jug.get("Dorsal", data_jug.get("dorsal", "0")).strip()
+
+    if not foto_b64:
+        try:
+            df_acum_temp = obtener_datos_pestana("ACUMULADO_TEMPORADA")
+            if not df_acum_temp.empty and "Jugador" in df_acum_temp.columns:
+                match_r = df_acum_temp[
+                    df_acum_temp["Jugador"].astype(str).str.strip().str.lower()
+                    == nom_jug.lower()
+                ]
+                if not match_r.empty:
+                    foto_b64 = match_r.iloc[0].get("Foto_URL", "")
+        except Exception:
+            pass
+
     if foto_b64 and "base64," in foto_b64:
         try:
             raw_b64 = foto_b64.split("base64,")[1]
@@ -1577,8 +1595,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     pdf.set_xy(50, 16)
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(*ORANGE)
-    nom_jug = data_jug.get("Jugador", data_jug.get("jugador", "Jugador"))
-    dor_jug = data_jug.get("Dorsal", data_jug.get("dorsal", "0"))
     pdf.cell(0, 8, sanitizar_texto(f"#{dor_jug} {nom_jug}"), ln=True)
 
     pdf.set_x(50)
@@ -1607,6 +1623,7 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
 
     pdf.ln(18)
 
+    # Tarjetas Métricas
     pdf.set_fill_color(*GRAY_BG)
     y_cards = pdf.get_y()
     w_card = 43
@@ -1632,6 +1649,9 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     mins_raw = data_jug.get("Minutos_Jugados", data_jug.get("minutos", 0))
     mins_val = f"{mins_raw} min" if int(mins_raw or 0) > 0 else "--"
 
+    pas_c = data_jug.get("Pases_Completados", data_jug.get("pases_completados", 0))
+    pas_i = data_jug.get("Pases_Intentados", data_jug.get("pases_intentados", 0))
+
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*ORANGE)
     pdf.set_x(12)
@@ -1654,25 +1674,19 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     pdf.cell(
         45,
         7,
-        f"{data_jug.get('Pases_Completados', data_jug.get('pases_completados', 0))}/{data_jug.get('Pases_Intentados', data_jug.get('pases_intentados', 0))}",
+        f"{pas_c}/{pas_i}",
         align="C",
         ln=True,
     )
 
     pdf.ln(10)
 
-    if buf_mapa_calor:
-        try:
-            pdf.image(buf_mapa_calor, x=20, y=pdf.get_y(), w=170)
-            pdf.set_y(175)
-        except Exception:
-            pass
-
+    # Tabla Desglose de Acciones (SE RENDERIZA PRIMERO SIN SOBREPOSICIÓN)
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*DARK)
     pdf.cell(0, 6, "Acciones Totales en el Partido", ln=True)
-    pdf.ln(1)
+    pdf.ln(2)
 
     stats_tabla = [
         (
@@ -1695,6 +1709,14 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
                 )
             ),
         ),
+        (
+            "Duelos Defensivos Ganados",
+            str(
+                data_jug.get(
+                    "Duelos_Def_Ganados", data_jug.get("duelos_def_ganados", 0)
+                )
+            ),
+        ),
     ]
 
     pdf.set_font("Helvetica", "B", 8.5)
@@ -1711,7 +1733,18 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
         pdf.cell(130, 5, f" {sanitizar_texto(var)}", 1, 0, "L")
         pdf.cell(56, 5, f" {sanitizar_texto(val)}", 1, 1, "C")
 
-    # --- PÁGINA 2: ANÁLISIS QUALITATIVO ACCUS-IA ---
+    pdf.ln(6)
+
+    # Inserción Controlada del Mapa de Calor
+    if buf_mapa_calor:
+        try:
+            curr_y = pdf.get_y()
+            pdf.image(buf_mapa_calor, x=30, y=curr_y, w=150)
+            pdf.set_y(curr_y + 85)
+        except Exception:
+            pass
+
+    # --- PÁGINA 2: ANÁLISIS CUALITATIVO Y SCOUTING ---
     pdf.add_page()
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
