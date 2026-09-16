@@ -15,9 +15,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
 from PIL import Image
-import scipy.ndimage as ndimage
 import streamlit as st
 
 try:
@@ -300,7 +298,7 @@ def procesar_foto_jugador_base64(file_obj):
 # 📊 GENERADORES NATIVOS Y MAPA DE CALOR MANUAL
 # =====================================================================
 def generar_mapa_calor_manual(matriz_3x3, nombre_jugador):
-    """Genera un Mapa de Calor suavizado sobre una cancha verde táctica."""
+    """Genera un Mapa de Calor suavizado sobre una cancha verde táctica mediante interpolación Gaussiana de Matplotlib."""
     fig, ax = plt.subplots(figsize=(7.5, 4.5))
     fig.patch.set_facecolor("#1b4332")
     ax.set_facecolor("#1b4332")
@@ -314,13 +312,13 @@ def generar_mapa_calor_manual(matriz_3x3, nombre_jugador):
     centro_circulo = plt.Circle((50, 50), 12, color=line_col, fill=False, lw=1.2)
     ax.add_artist(centro_circulo)
 
-    matriz_zoom = ndimage.zoom(matriz_3x3, zoom=20, order=3)
     ax.imshow(
-        matriz_zoom,
+        matriz_3x3,
         cmap="YlOrRd",
-        alpha=0.6,
+        alpha=0.65,
         extent=[0, 100, 0, 100],
         origin="lower",
+        interpolation="gaussian",
     )
 
     plt.title(
@@ -899,11 +897,11 @@ def generar_scouting_cualitativo_jugador(data_jugador):
 
         prompt = f"""
         Actúa como Senior Scout y Analista de Rendimiento Individual para AccuSport Colombia.
-        Elabora un diagnóstico técnico del jugador {data_jugador.get('jugador', 'Jugador')} con base en sus métricas de partido:
-        - Participaciones: {data_jugador.get('participaciones', 0)}
-        - Goles: {data_jugador.get('goles', 0)}, Asistencias: {data_jugador.get('asistencias', 0)}
-        - Remates Totales: {data_jugador.get('remates_totales', 0)} (A Puerta: {data_jugador.get('remates_a_puerta', 0)})
-        - Pases Completados: {data_jugador.get('pases_completados', 0)} de {data_jugador.get('pases_intentados', 0)}
+        Elabora un diagnóstico técnico del jugador {data_jugador.get('Jugador', data_jugador.get('jugador', 'Jugador'))} con base en sus métricas de partido:
+        - Participaciones: {data_jugador.get('Participaciones_Totales', data_jugador.get('participaciones', 0))}
+        - Goles: {data_jugador.get('Goles', data_jugador.get('goles', 0))}, Asistencias: {data_jugador.get('Asistencias', data_jugador.get('asistencias', 0))}
+        - Remates Totales: {data_jugador.get('Remates_Totales', data_jugador.get('remates_totales', 0))} (A Puerta: {data_jugador.get('Remates_A_Puerta', data_jugador.get('remates_a_puerta', 0))})
+        - Pases Completados: {data_jugador.get('Pases_Completados', data_jugador.get('pases_completados', 0))} de {data_jugador.get('Pases_Intentados', data_jugador.get('pases_intentados', 0))}
 
         Responde en JSON estricto:
         {{
@@ -1553,7 +1551,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     pdf.set_fill_color(*DARK)
     pdf.rect(12, 12, 186, 35, "F")
 
-    # Renderizar Foto Base64 si existe
     foto_b64 = data_jug.get("Foto_URL", "")
     if foto_b64 and "base64," in foto_b64:
         try:
@@ -1604,7 +1601,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
 
     pdf.ln(18)
 
-    # Tarjetas Métricas Principales (Adaptativo)
     pdf.set_fill_color(*GRAY_BG)
     y_cards = pdf.get_y()
     w_card = 43
@@ -1659,7 +1655,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
 
     pdf.ln(10)
 
-    # Inserción de Mapa de Calor Táctico
     if buf_mapa_calor:
         try:
             pdf.image(buf_mapa_calor, x=20, y=pdf.get_y(), w=170)
@@ -1667,7 +1662,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
         except Exception:
             pass
 
-    # Tabla Desglose de Acciones
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*DARK)
@@ -1725,7 +1719,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     )
     pdf.ln(6)
 
-    # Consultar AccusIA para Scouting
     scout_data = generar_scouting_cualitativo_jugador(data_jug)
 
     pdf.set_x(12)
@@ -2263,7 +2256,6 @@ with tab_admin:
                     ["Ficha del Último Partido", "Dossier Consolidado de Temporada"],
                 )
 
-                # Módulo Interactivo de Mapa de Calor Manual
                 st.write("---")
                 st.write("🔥 **Configuración del Mapa de Calor Táctico (3x3)**")
                 st.caption(
