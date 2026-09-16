@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import re
@@ -8,7 +9,6 @@ from google import genai
 from google.genai import types
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 import gspread
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -26,7 +26,6 @@ except ImportError:
 # 📝 CONFIGURACIÓN INICIAL Y CENTRAL DE BRANDING
 # =====================================================================
 CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4"
-DRIVE_FOLDER_ID = "1qUFWSH_wvAxpONKuWPaOjF7xqQ8vTrDC"
 FOCUS_CALENDAR_DEFAULT = "c_3df55a2bb225d2a2d2054496334a5d7c7f9afca3f9099aea782b278fd9f45472@group.calendar.google.com"
 PATH_LOGO_FOCUS = "IMG-20260521-WA0004.jpg"
 
@@ -141,11 +140,6 @@ def obtener_cliente_sheets():
 def obtener_servicio_calendar():
     creds = conectar_google_services()
     return build("calendar", "v3", credentials=creds) if creds else None
-
-
-def obtener_servicio_drive():
-    creds = conectar_google_services()
-    return build("drive", "v3", credentials=creds) if creds else None
 
 
 def obtener_datos_pestana(nombre_pestana):
@@ -282,40 +276,23 @@ def inicializar_pestanas_jugadores():
         st.error(f"❌ Error al inicializar pestañas: {e}")
 
 
-def subir_foto_jugador_drive(file_obj, nombre_jugador, dorsal, equipo):
-    drive_service = obtener_servicio_drive()
-    if not drive_service:
-        st.error("❌ No se pudo conectar con Google Drive.")
-        return None
-
+def procesar_foto_jugador_base64(file_obj):
+    """Optimiza la foto del jugador a 250x250 px y la convierte en un string Base64 ultra ligero."""
     try:
-        nombre_limpio = nombre_jugador.replace(' ', '_')
-        file_metadata = {
-            "name": f"FOTO_#{dorsal}_{nombre_limpio}_{equipo}.jpg",
-            "mimeType": "image/jpeg",
-            "parents": [DRIVE_FOLDER_ID],
-        }
-        media = MediaIoBaseUpload(
-            io.BytesIO(file_obj.getvalue()),
-            mimetype="image/jpeg",
-            resumable=True,
-        )
+        img = Image.open(io.BytesIO(file_obj.getvalue()))
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
-        archivo_subido = (
-            drive_service.files()
-            .create(body=file_metadata, media_body=media, fields="id, webViewLink")
-            .execute()
-        )
+        # Redimensionar proporcionalmente a tamaño carné
+        img.thumbnail((250, 250))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=75)
+        img_bytes = buf.getvalue()
 
-        file_id = archivo_subido.get("id")
-        drive_service.permissions().create(
-            fileId=file_id, body={"type": "anyone", "role": "reader"}
-        ).execute()
-
-        foto_url = f"https://drive.google.com/uc?id={file_id}"
-        return foto_url
+        b64_str = base64.b64encode(img_bytes).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64_str}"
     except Exception as e:
-        st.error(f"❌ Error al subir imagen a Google Drive: {e}")
+        st.error(f"❌ Error al procesar imagen: {e}")
         return None
 
 
@@ -1774,7 +1751,7 @@ with tab_admin:
         elif opcion_admin == "📸 Cargar Foto de Jugador (Perfil / Scouting)":
             st.write("#### 📸 Cargar Fotografía Oficial de Perfil")
             st.write(
-                "Sube la foto del jugador para vincularla a su ficha técnica y dossiers en PDF."
+                "Sube la foto del jugador para vincularla directamente a Google Sheets."
             )
 
             foto_file = st.file_uploader(
@@ -1789,13 +1766,12 @@ with tab_admin:
             with col_f3:
                 eq_foto = st.text_input("Equipo / Categoría:", value="Fortaleza 2017 B")
 
-            if st.button("💾 GUARDAR FOTO EN DRIVE Y GOOGLE SHEETS", use_container_width=True):
+            if st.button("💾 GUARDAR FOTO EN GOOGLE SHEETS", use_container_width=True):
                 if foto_file and (nom_foto or dor_foto):
-                    with st.spinner("Subiendo foto a Google Drive..."):
-                        url_foto = subir_foto_jugador_drive(
-                            foto_file, nom_foto.strip(), dor_foto.strip(), eq_foto.strip()
-                        )
-                        if url_foto:
+                    with st.spinner("Procesando y optimizando imagen..."):
+                        b64_foto = procesar_foto_jugador_base64(foto_file)
+
+                        if b64_foto:
                             client = obtener_cliente_sheets()
                             if client:
                                 sheet = client.open_by_key(CONFIG_SHEET_ID)
@@ -1815,13 +1791,20 @@ with tab_admin:
                                             break
 
                                     if target_row:
-                                        ws_acum.update_cell(target_row, 14, url_foto)
+                                        ws_acum.update_cell(target_row, 14, b64_foto)
                                         st.success(
-                                            f"📸 Foto de **{nom_foto or ('#' + dor_foto)}** guardada y vinculada exitosamente."
+                                            f"📸 Foto de **{nom_foto or ('#' + dor_foto)}** guardada correctamente en Google Sheets."
                                         )
                                     else:
-                                        st.info(
-                                            f"Foto subida a Drive. La URL se vinculará automáticamente cuando se ingeste el primer partido de **{nom_foto or ('#' + dor_foto)}**."
+                                        ws_acum.append_row([
+                                            nom_foto.strip(),
+                                            eq_foto.strip(),
+                                            dor_foto.strip(),
+                                            0, 0, 0, 0, 0, 0, "0%", 0, "0%", 0,
+                                            b64_foto
+                                        ])
+                                        st.success(
+                                            f"📸 Foto de **{nom_foto or ('#' + dor_foto)}** guardada e inicializada en la base de datos."
                                         )
                                 except Exception as e:
                                     st.error(f"Error al actualizar celda: {e}")
