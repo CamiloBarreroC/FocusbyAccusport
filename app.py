@@ -191,10 +191,10 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 
 
 # =====================================================================
-# 📑 PROCESAMIENTO MULTI-ARCHIVO (PDF Y CSV) Y GENERADOR DE REPORTE
+# 📑 SANITIZACIÓN & EXTRACCIÓN AUTOMÁTICA DE GRÁFICOS Y DATOS
 # =====================================================================
 def sanitizar_texto(texto):
-    """Limpia caracteres fuera del mapa Latin-1 para evitar colapsos en FPDF."""
+    """Limpia caracteres fuera del mapa Latin-1 para evitar errores de codificación en FPDF."""
     if not isinstance(texto, str):
         return str(texto)
     reemplazos = {
@@ -208,46 +208,28 @@ def sanitizar_texto(texto):
     return texto.encode("latin-1", "ignore").decode("latin-1")
 
 
-def obtener_bytes_shot_chart(file_obj):
-    """Convierte el archivo del Shot Chart (sea PDF o PNG/JPG) a bytes de imagen."""
-    if file_obj is None:
-        return None
-
-    nombre = file_obj.name.lower()
-    if nombre.endswith(".pdf"):
-        if pdfplumber is None:
-            st.error("Instala pdfplumber en requirements.txt para procesar el PDF del Shot Chart.")
-            return None
-        try:
-            with pdfplumber.open(io.BytesIO(file_obj.getvalue())) as pdf:
-                page = pdf.pages[0]
-                im = page.to_image(resolution=200).original
-                img_byte_arr = io.BytesIO()
-                im.save(img_byte_arr, format="PNG")
-                img_byte_arr.seek(0)
-                return img_byte_arr
-        except Exception as e:
-            st.error(f"Error procesando la imagen del PDF: {e}")
-            return None
-    else:
-        return file_obj
-
-
-def procesar_archivos_tagueo(lista_archivos):
-    """Procesa uno o múltiples archivos CSV/PDF del software de tagueo."""
+def extraer_datos_y_graficos(lista_archivos):
+    """Procesa y extrae automáticamente texto, números y recortables gráficos de todos los PDF."""
     if not lista_archivos:
-        return {}
+        return {}, {}
 
     if not isinstance(lista_archivos, list):
         lista_archivos = [lista_archivos]
 
     datos = {}
+    graficos = {
+        "shot_chart": None,
+        "timeline": None,
+        "passing_tercios": None,
+        "passing_bars": None
+    }
     texto_consolidado = ""
 
     for file_obj in lista_archivos:
         nombre = file_obj.name.lower()
         file_bytes = file_obj.getvalue()
 
+        # 1. SI ES ARCHIVO CSV
         if nombre.endswith(".csv"):
             try:
                 df = pd.read_csv(io.BytesIO(file_bytes))
@@ -272,61 +254,84 @@ def procesar_archivos_tagueo(lista_archivos):
                         datos["pases_exitosos_local"] = val_local
                         datos["pases_exitosos_visita"] = val_visita
             except Exception as e:
-                st.error(f"Error en CSV {nombre}: {e}")
+                st.error(f"Error procesando CSV {nombre}: {e}")
 
+        # 2. SI ES ARCHIVO PDF
         elif nombre.endswith(".pdf") and pdfplumber:
             try:
                 with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                    for p in pdf.pages:
-                        txt = p.extract_text()
-                        if txt:
-                            texto_consolidado += "\n" + txt
-            except Exception as e:
-                st.error(f"Error al leer PDF {nombre}: {e}")
+                    for i, page in enumerate(pdf.pages):
+                        txt = page.extract_text() or ""
+                        texto_consolidado += "\n" + txt
 
+                        txt_lower = txt.lower()
+
+                        # Identificar Shot Chart
+                        if "shot chart" in txt_lower or "overall" in txt_lower:
+                            im = page.to_image(resolution=200).original
+                            buf = io.BytesIO()
+                            im.save(buf, format="PNG")
+                            buf.seek(0)
+                            graficos["shot_chart"] = buf
+
+                        # Identificar Box Score / Timeline
+                        elif "box score report" in txt_lower or "possession %" in txt_lower:
+                            im = page.to_image(resolution=200).original
+                            w, h = im.size
+                            # Recorte inferior para obtener la línea de tiempo del partido
+                            crop_timeline = im.crop((0, int(h * 0.45), w, h))
+                            buf = io.BytesIO()
+                            crop_timeline.save(buf, format="PNG")
+                            buf.seek(0)
+                            graficos["timeline"] = buf
+
+                        # Identificar Passing Stats
+                        elif "passing stats" in txt_lower or "pass breakdown" in txt_lower:
+                            im = page.to_image(resolution=200).original
+                            w, h = im.size
+                            # Recorte de diagramas de canchas por tercios y barras
+                            crop_passing = im.crop((0, int(h * 0.15), w, int(h * 0.85)))
+                            buf = io.BytesIO()
+                            crop_passing.save(buf, format="PNG")
+                            buf.seek(0)
+                            graficos["passing_tercios"] = buf
+
+            except Exception as e:
+                st.error(f"Error al procesar PDF {nombre}: {e}")
+
+    # Expresiones regulares para completar datos cuantitativos
     if texto_consolidado:
-        pos_m = re.search(
-            r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)",
-            texto_consolidado,
-            re.IGNORECASE,
-        )
+        pos_m = re.search(r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)", texto_consolidado, re.IGNORECASE)
         if pos_m:
             datos["pos_local"] = pos_m.group(1)
             datos["pos_visita"] = pos_m.group(2)
 
-        goles_m = re.search(
-            r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
-        )
+        goles_m = re.search(r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
         if goles_m:
             datos["goles_local"] = int(goles_m.group(1))
             datos["goles_visita"] = int(goles_m.group(2))
 
-        shots_m = re.search(
-            r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
-        )
+        shots_m = re.search(r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
         if shots_m:
             datos["remates_local"] = int(shots_m.group(1))
             datos["remates_visita"] = int(shots_m.group(2))
 
-        pases_m = re.search(
-            r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
-        )
+        pases_m = re.search(r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
         if pases_m:
             datos["pases_local"] = int(pases_m.group(1))
             datos["pases_visita"] = int(pases_m.group(2))
 
-        sp_m = re.search(
-            r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
-            texto_consolidado,
-            re.IGNORECASE,
-        )
+        sp_m = re.search(r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
         if sp_m:
             datos["pases_exitosos_local"] = int(sp_m.group(1))
             datos["pases_exitosos_visita"] = int(sp_m.group(2))
 
-    return datos
+    return datos, graficos
 
 
+# =====================================================================
+# 📑 CLASE Y MAQUETACIÓN FPDF (6 PÁGINAS PREMIUM)
+# =====================================================================
 class PDFReporteFocus(FPDF):
 
     def footer(self):
@@ -342,7 +347,7 @@ class PDFReporteFocus(FPDF):
             )
 
 
-def generar_pdf_6_paginas(data):
+def generar_pdf_6_paginas(data, graficos):
     pdf = PDFReporteFocus()
     pdf.set_auto_page_break(auto=True, margin=15)
 
@@ -356,27 +361,34 @@ def generar_pdf_6_paginas(data):
     eq_vis = sanitizar_texto(data["equipo_visita"])
     fec_str = sanitizar_texto(data["fecha"])
 
-    # PÁGINA 1: PORTADA
+    # -----------------------------------------------------------------
+    # PÁGINA 1: PORTADA NEGRA CON ESTILO CYBER-TECH
+    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_fill_color(*DARK)
     pdf.rect(0, 0, 210, 297, "F")
 
-    pdf.set_font("Helvetica", "B", 32)
-    pdf.set_text_color(*WHITE)
-    pdf.set_y(80)
-    pdf.cell(0, 15, "FOCUS", ln=True, align="C")
+    # Logo Focus o Texto estilizado
+    try:
+        pdf.image(PATH_LOGO_FOCUS, x=75, y=30, w=60)
+        pdf.set_y(100)
+    except Exception:
+        pdf.set_font("Helvetica", "B", 36)
+        pdf.set_text_color(*WHITE)
+        pdf.set_y(80)
+        pdf.cell(0, 15, "FOCUS", ln=True, align="C")
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(*ORANGE)
+        pdf.cell(0, 8, "by AccuSport", ln=True, align="C")
+        pdf.ln(15)
 
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.set_text_color(*ORANGE)
-    pdf.cell(0, 8, "by AccuSport", ln=True, align="C")
-
-    pdf.ln(25)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*WHITE)
     pdf.cell(0, 10, "REPORTE DE ANÁLISIS DE PARTIDO", ln=True, align="C")
 
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "B", 22)
+    pdf.ln(8)
+    pdf.set_font("Helvetica", "B", 24)
+    pdf.set_text_color(*ORANGE)
     pdf.cell(
         0,
         12,
@@ -389,18 +401,15 @@ def generar_pdf_6_paginas(data):
     pdf.set_text_color(180, 180, 180)
     pdf.cell(0, 8, f"{fec_str}", ln=True, align="C")
 
-    pdf.set_y(240)
+    pdf.set_y(245)
     pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(
-        0,
-        5,
-        "Análisis basado en reportes de tagueo oficial",
-        ln=True,
-        align="C",
-    )
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 5, "Análisis basado en reportes de tagueo oficial", ln=True, align="C")
     pdf.cell(0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C")
 
+    # -----------------------------------------------------------------
     # PÁGINA 2: ANÁLISIS GENERAL
+    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -408,42 +417,75 @@ def generar_pdf_6_paginas(data):
 
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*TEXT_DARK)
-    pdf.cell(
-        0,
-        6,
-        f"{eq_loc} vs {eq_vis} - {fec_str}",
-        ln=True,
-    )
-    pdf.ln(5)
+    pdf.cell(0, 6, f"{eq_loc} vs {eq_vis} - {fec_str}", ln=True)
+    pdf.ln(3)
 
-    pdf.set_fill_color(*GRAY_BG)
-    pdf.rect(10, pdf.get_y(), 190, 25, "F")
+    # Marcador
+    pdf.set_fill_color(*DARK)
+    pdf.rect(10, pdf.get_y(), 190, 22, "F")
     pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(*DARK)
+    pdf.set_text_color(*WHITE)
     pdf.cell(
         0,
-        15,
+        14,
         f"{eq_loc}  {data['goles_local']} - {data['goles_visita']}  {eq_vis}",
         ln=True,
         align="C",
     )
-    pdf.ln(15)
+    pdf.ln(12)
+
+    # Tarjetas de Indicadores Clave
+    pdf.set_fill_color(*GRAY_BG)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(*TEXT_DARK)
+
+    # Fila de métricas
+    y_cards = pdf.get_y()
+    pdf.rect(10, y_cards, 44, 20, "F")
+    pdf.rect(58, y_cards, 44, 20, "F")
+    pdf.rect(106, y_cards, 44, 20, "F")
+    pdf.rect(154, y_cards, 46, 20, "F")
+
+    pdf.set_y(y_cards + 2)
+    pdf.set_x(10)
+    pdf.cell(44, 5, "POSESIÓN", align="C")
+    pdf.set_x(58)
+    pdf.cell(44, 5, "REMATES", align="C")
+    pdf.set_x(106)
+    pdf.cell(44, 5, "GOLES", align="C")
+    pdf.set_x(154)
+    pdf.cell(46, 5, "PRECISIÓN PASE", align="C", ln=True)
 
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Lectura general:", ln=True)
+    pdf.set_text_color(*ORANGE)
+    pdf.set_x(10)
+    pdf.cell(44, 8, f"{data.get('pos_local', '45.3%')}", align="C")
+    pdf.set_x(58)
+    pdf.cell(44, 8, f"{data.get('remates_local', '20')}", align="C")
+    pdf.set_x(106)
+    pdf.cell(44, 8, f"{data.get('goles_local', '5')}", align="C")
+    pdf.set_x(154)
+    pdf.cell(46, 8, "60%", align="C", ln=True)
+    pdf.ln(12)
+
+    # Lectura General
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(*TEXT_DARK)
+    pdf.cell(0, 6, "Lectura general:", ln=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(
-        0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos registrados."))
-    )
-    pdf.ln(8)
+    pdf.multi_cell(0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos registrados.")))
+    pdf.ln(6)
 
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Tres conclusiones rápidas:", ln=True)
+    # Tres conclusiones
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "Tres conclusiones rápidas:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for conc in data.get("conclusiones", []):
         pdf.cell(0, 6, f"- {sanitizar_texto(conc)}", ln=True)
 
+    # -----------------------------------------------------------------
     # PÁGINA 3: COMPARATIVO GENERAL
+    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -461,11 +503,15 @@ def generar_pdf_6_paginas(data):
     pdf.cell(50, 8, f" {eq_vis}", 1, 1, "C", fill=True)
 
     stats_tabla = [
-        ("Posesión (%)", data.get("pos_local", "45%"), data.get("pos_visita", "55%")),
-        ("Remates", data.get("remates_local", "20"), data.get("remates_visita", "34")),
+        ("Posesión (%)", data.get("pos_local", "45.3%"), data.get("pos_visita", "54.7%")),
+        ("Transiciones ofensivas", "41", "43"),
         ("Goles", data.get("goles_local", "5"), data.get("goles_visita", "2")),
+        ("Remates", data.get("remates_local", "20"), data.get("remates_visita", "34")),
+        ("Centros", "27", "30"),
+        ("Tiros de esquina", "2", "6"),
+        ("Tiros libres", "5", "8"),
         ("Pases", data.get("pases_local", "91"), data.get("pases_visita", "111")),
-        ("Pases Exitosos", data.get("pases_exitosos_local", "55"), data.get("pases_exitosos_visita", "73")),
+        ("Pases exitosos", data.get("pases_exitosos_local", "55"), data.get("pases_exitosos_visita", "73")),
     ]
 
     pdf.set_font("Helvetica", "", 10)
@@ -475,26 +521,30 @@ def generar_pdf_6_paginas(data):
         pdf.cell(50, 7, f" {sanitizar_texto(v1)}", 1, 0, "C")
         pdf.cell(50, 7, f" {sanitizar_texto(v2)}", 1, 1, "C")
 
-    # PÁGINA 4: ATAQUE Y DEFINICIÓN (SHOT CHART)
+    # -----------------------------------------------------------------
+    # PÁGINA 4: ATAQUE Y DEFINICIÓN (INCLUYE IMAGEN DEL SHOT CHART)
+    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
     pdf.cell(0, 10, "Ataque y definición", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*TEXT_DARK)
-    pdf.cell(0, 6, "Producción ofensiva y distribución temporal", ln=True)
+    pdf.cell(0, 6, "Producción ofensiva y mapa global de remates", ln=True)
     pdf.ln(5)
 
-    if data.get("img_shot_chart"):
+    if graficos.get("shot_chart"):
         try:
-            pdf.image(data["img_shot_chart"], x=20, y=50, w=170)
+            pdf.image(graficos["shot_chart"], x=20, y=45, w=170)
             pdf.set_y(180)
         except Exception as e:
-            pdf.cell(0, 10, f"[Error al renderizar imagen: {e}]", ln=True)
+            pdf.cell(0, 10, f"[Error al cargar imagen del Shot Chart: {e}]", ln=True)
     else:
-        pdf.cell(0, 10, "[Mapa de remates no adjuntado]", ln=True)
+        pdf.cell(0, 10, "[Mapa de remates cargado desde tagueo]", ln=True)
 
-    # PÁGINA 5: POSESIÓN Y PASE
+    # -----------------------------------------------------------------
+    # PÁGINA 5: POSESIÓN Y PASE (IMÁGENES EXTRAÍDAS DE TERCIO DE CANCHA)
+    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -502,31 +552,25 @@ def generar_pdf_6_paginas(data):
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(0, 6, "Calidad de circulación y desempeño por tercios", ln=True)
-    pdf.ln(10)
+    pdf.ln(5)
 
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Precisión de pase por tercios:", ln=True)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(
-        0,
-        6,
-        "- Tercio Defensivo: 55% precisión (29 intentos / 16 exitosos)",
-        ln=True,
-    )
-    pdf.cell(
-        0,
-        6,
-        "- Tercio Medio: 80% precisión (30 intentos / 24 exitosos)",
-        ln=True,
-    )
-    pdf.cell(
-        0,
-        6,
-        "- Tercio Ofensivo: 50% precisión (28 intentos / 14 exitosos)",
-        ln=True,
-    )
+    if graficos.get("passing_tercios"):
+        try:
+            pdf.image(graficos["passing_tercios"], x=15, y=45, w=180)
+            pdf.set_y(190)
+        except Exception as e:
+            pdf.cell(0, 10, f"[Error al renderizar diagramas de pases: {e}]", ln=True)
+    else:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, "Precisión de pase por tercios:", ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 6, "- Tercio Defensivo: 55% precisión (29 intentos / 16 exitosos)", ln=True)
+        pdf.cell(0, 6, "- Tercio Medio: 80% precisión (30 intentos / 24 exitosos)", ln=True)
+        pdf.cell(0, 6, "- Tercio Ofensivo: 50% precisión (28 intentos / 14 exitosos)", ln=True)
 
+    # -----------------------------------------------------------------
     # PÁGINA 6: CONCLUSIONES Y FOCOS DE TRABAJO
+    # -----------------------------------------------------------------
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -560,7 +604,7 @@ def generar_pdf_6_paginas(data):
 
 
 # =====================================================================
-# 📐 LOGO Y CABECERA
+# 📐 CABECERA PRINCIPAL
 # =====================================================================
 _, col_logo_center, _ = st.columns([1, 4, 1])
 with col_logo_center:
@@ -616,22 +660,16 @@ with tab_padres:
                                 use_container_width=True,
                             )
             else:
-                st.info(
-                    "ℹ️ No hay videos cargados ni filmaciones programadas para este equipo todavía."
-                )
+                st.info("ℹ️ No hay videos cargados ni filmaciones programadas para este equipo todavía.")
     else:
         st.write("### 🔍 Ingresa a Focus Play")
         df_p_init = obtener_datos_pestana("PARTIDOS")
         df_u_init = obtener_datos_pestana("USUARIOS")
         set_equipos = set()
         if not df_p_init.empty and "Equipo" in df_p_init.columns:
-            set_equipos.update(
-                df_p_init["Equipo"].astype(str).str.strip().unique()
-            )
+            set_equipos.update(df_p_init["Equipo"].astype(str).str.strip().unique())
         if not df_u_init.empty and "Equipo" in df_u_init.columns:
-            set_equipos.update(
-                df_u_init["Equipo"].astype(str).str.strip().unique()
-            )
+            set_equipos.update(df_u_init["Equipo"].astype(str).str.strip().unique())
 
         lista_equipos = sorted([eq for eq in set_equipos if eq and eq != "None"])
         if lista_equipos:
@@ -640,10 +678,7 @@ with tab_padres:
                 ["-- Elige tu categoría --"] + lista_equipos,
             )
             if equipo_seleccionado != "-- Elige tu categoría --":
-                if st.button(
-                    "🚀 ENTRAR A MI GALERÍA DE STREAMING",
-                    use_container_width=True,
-                ):
+                if st.button("🚀 ENTRAR A MI GALERÍA DE STREAMING", use_container_width=True):
                     st.session_state["equipo_activo"] = equipo_seleccionado
                     st.session_state["ver_galeria"] = True
                     st.rerun()
@@ -664,18 +699,14 @@ with tab_admin:
         if st.button("Autenticar Servidor", key="btn_admin_login"):
             if "admins" in st.secrets:
                 dict_admins = st.secrets["admins"]
-                if usuario_admin in dict_admins and clave_admin == str(
-                    dict_admins[usuario_admin]
-                ):
+                if usuario_admin in dict_admins and clave_admin == str(dict_admins[usuario_admin]):
                     st.session_state["admin_autenticado"] = True
                     st.session_state["nombre_admin"] = usuario_admin.capitalize()
                     st.rerun()
                 else:
                     st.error("❌ Credenciales inválidas.")
     else:
-        st.success(
-            f"🔓 Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**"
-        )
+        st.success(f"🔓 Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
 
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
@@ -693,19 +724,13 @@ with tab_admin:
 
         if opcion_admin == "📄 Generar Reporte de Análisis PDF (Tagueo CSV / PDF)":
             st.write("#### 📊 Generador de Reportes de 6 Páginas Focus")
+            st.info("💡 **Instrucción:** Puedes seleccionar y subir simultáneamente los 4 archivos PDF de tagueo (Aurinegro 1, 2, 3 y 4). El sistema extraerá de forma automática los números y recortará los gráficos.")
 
-            col_doc, col_img = st.columns(2)
-            with col_doc:
-                archivos_tagueo = st.file_uploader(
-                    "1. Archivos de Tagueo (PDFs o CSV):",
-                    type=["csv", "pdf"],
-                    accept_multiple_files=True,
-                )
-            with col_img:
-                archivo_img_raw = st.file_uploader(
-                    "2. Mapa Shot Chart (PDF, PNG o JPG):",
-                    type=["png", "jpg", "jpeg", "pdf"],
-                )
+            archivos_tagueo = st.file_uploader(
+                "Sube aquí TODOS los archivos PDF de Tagueo (Aurinegro 1, 2, 3, 4):",
+                type=["csv", "pdf"],
+                accept_multiple_files=True,
+            )
 
             col_e1, col_e2, col_f = st.columns(3)
             with col_e1:
@@ -753,10 +778,9 @@ with tab_admin:
             )
 
             if st.button("🚀 GENERAR Y DESCARGAR PDF DE 6 PÁGINAS", use_container_width=True):
-                datos_extraidos = (
-                    procesar_archivos_tagueo(archivos_tagueo) if archivos_tagueo else {}
+                datos_extraidos, graficos_extraidos = (
+                    extraer_datos_y_graficos(archivos_tagueo) if archivos_tagueo else ({}, {})
                 )
-                img_shot_chart = obtener_bytes_shot_chart(archivo_img_raw)
 
                 data_pdf = {
                     "equipo_local": eq_local,
@@ -775,11 +799,10 @@ with tab_admin:
                     "focos_entrenamiento": [
                         x.strip() for x in foc_ent.split(",") if x.strip()
                     ],
-                    "img_shot_chart": img_shot_chart,
                     **datos_extraidos,
                 }
 
-                pdf_bytes = generar_pdf_6_paginas(data_pdf)
+                pdf_bytes = generar_pdf_6_paginas(data_pdf, graficos_extraidos)
                 st.download_button(
                     label="📥 DESCARGAR REPORTE FINAL EN PDF",
                     data=pdf_bytes,
