@@ -15,8 +15,9 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
 from PIL import Image
-import streamlit as st
+import Streamlit as st
 
 try:
     import pdfplumber
@@ -111,7 +112,7 @@ for key, val in defaults.items():
 
 
 # =====================================================================
-# 🔗 CONEXIONES Y SERVICIOS GOOGLE
+# 🔗 CONEXIONES Y SERVICIOS GOOGLE (CON CACHÉ ANTI-BLOQUEOS)
 # =====================================================================
 @st.cache_resource
 def conectar_google_services():
@@ -143,7 +144,9 @@ def obtener_servicio_calendar():
     return build("calendar", "v3", credentials=creds) if creds else None
 
 
+@st.cache_data(ttl=60)
 def obtener_datos_pestana(nombre_pestana):
+    """Guarda los datos en RAM durante 60s para evitar la saturación de Google Sheets al mover sliders."""
     client = obtener_cliente_sheets()
     if client:
         try:
@@ -166,6 +169,7 @@ def agregar_fila_excel(nombre_pestana, lista_datos):
             sheet = client.open_by_key(CONFIG_SHEET_ID)
             worksheet = sheet.worksheet(nombre_pestana)
             worksheet.append_row(lista_datos)
+            st.cache_data.clear()
             return True
         except Exception as e:
             st.error(f"❌ Error al escribir en Excel: {e}")
@@ -268,6 +272,7 @@ def inicializar_pestanas_jugadores():
             )
             ws_acum.append_row(headers_acumulado)
 
+        st.cache_data.clear()
         st.success(
             "✅ Pestañas 'HISTORICO_PARTIDOS' y 'ACUMULADO_TEMPORADA' listadas y creadas correctamente en Google Sheets."
         )
@@ -298,7 +303,7 @@ def procesar_foto_jugador_base64(file_obj):
 # 📊 GENERADORES NATIVOS Y MAPA DE CALOR MANUAL
 # =====================================================================
 def generar_mapa_calor_manual(matriz_3x3, nombre_jugador):
-    """Genera un Mapa de Calor suavizado sobre una cancha verde táctica mediante interpolación Gaussiana de Matplotlib."""
+    """Genera un Mapa de Calor suavizado sobre una cancha verde táctica."""
     fig, ax = plt.subplots(figsize=(7.5, 4.5))
     fig.patch.set_facecolor("#1b4332")
     ax.set_facecolor("#1b4332")
@@ -1059,6 +1064,7 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
             else:
                 ws_acum.append_row(fila_acum)
 
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"❌ Error al actualizar Google Sheets: {e}")
@@ -2375,6 +2381,7 @@ with tab_admin:
 
                                     if target_row:
                                         ws_acum.update_cell(target_row, 14, b64_foto)
+                                        st.cache_data.clear()
                                         st.success(
                                             f"📸 Foto de **{nom_foto or ('#' + dor_foto)}** guardada correctamente en Google Sheets."
                                         )
@@ -2386,6 +2393,7 @@ with tab_admin:
                                             0, 0, 0, 0, 0, 0, "0%", 0, "0%", 0,
                                             b64_foto
                                         ])
+                                        st.cache_data.clear()
                                         st.success(
                                             f"📸 Foto de **{nom_foto or ('#' + dor_foto)}** guardada e inicializada en la base de datos."
                                         )
