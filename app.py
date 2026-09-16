@@ -4,6 +4,8 @@ import re
 from datetime import datetime, timedelta
 
 from fpdf import FPDF
+from google import genai
+from google.genai import types
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import gspread
@@ -83,14 +85,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-for key, default in [
-    ("admin_autenticado", False),
-    ("nombre_admin", ""),
-    ("ver_galeria", False),
-    ("equipo_activo", ""),
-]:
+# Inicialización de variables de sesión
+defaults = {
+    "admin_autenticado": False,
+    "nombre_admin": "",
+    "ver_galeria": False,
+    "equipo_activo": "",
+    "lectura_gen": "Fortaleza 2017 B ganó 5-2 combinando dos rasgos decisivos: alta eficiencia ofensiva y solidez defensiva.",
+    "conc_1": "La diferencia del partido estuvo más asociada a la eficacia que al volumen.",
+    "conc_2": "El mejor registro de pase apareció en el tercio medio: 80% de precisión.",
+    "conc_3": "La estructura defensiva limitó al rival a solo 2 goles en 34 remates.",
+    "asp_cons": "Definición eficiente, Inicio de partido arrollador, Defensa y marca sólida",
+    "asp_corr": "Control del volumen rival, Salida bajo presión, Conexión en último tercio",
+    "foc_ent": "Sostener el bloque defensivo, Salida y progresión rápida, Conexión en último tercio",
+}
+
+for key, val in defaults.items():
     if key not in st.session_state:
-        st.session_state[key] = default
+        st.session_state[key] = val
 
 
 # =====================================================================
@@ -191,10 +203,53 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 
 
 # =====================================================================
+# 🤖 MOTOR GEMINI IA PARA ANÁLISIS TÁCTICO AUTOMÁTICO
+# =====================================================================
+def generar_analisis_tactico_gemini(datos_extraidos, equipo_local, equipo_visita):
+    """Genera el análisis táctico automático conectando con la API de Gemini mediante Secrets."""
+    try:
+        if "GEMINI_API_KEY" not in st.secrets:
+            st.error("⚠️ No se encontró la clave GEMINI_API_KEY en los Secrets de Streamlit.")
+            return None
+
+        api_key = st.secrets["GEMINI_API_KEY"]
+        client = genai.Client(api_key=api_key)
+
+        prompt = f"""
+        Actúa como Director Técnico y Analista Táctico de fútbol profesional.
+        Analiza las siguientes estadísticas de un partido entre {equipo_local} (Local) vs {equipo_visita} (Visitante):
+
+        ESTADÍSTICAS DEL PARTIDO:
+        {json.dumps(datos_extraidos, indent=2)}
+
+        Genera una respuesta en formato JSON estricto con exactamente estas claves:
+        - lectura_general: Párrafo claro (3-4 líneas) resumiendo el balance táctico y la clave del resultado.
+        - conclusiones: Lista de exactamente 3 conclusiones tácticas cortas.
+        - aspectos_conservar: Lista de 3 fortalezas del equipo {equipo_local}.
+        - aspectos_corregir: Lista de 3 aspectos a mejorar del equipo {equipo_local}.
+        - focos_entrenamiento: Lista de 3 ejercicios o enfoques tácticos para el entrenamiento semanal.
+        """
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
+        )
+
+        return json.loads(response.text)
+    except Exception as e:
+        st.error(f"❌ Error al consultar a Gemini IA: {e}")
+        return None
+
+
+# =====================================================================
 # 📑 SANITIZACIÓN & EXTRACCIÓN AUTOMÁTICA DE GRÁFICOS Y DATOS
 # =====================================================================
 def sanitizar_texto(texto):
-    """Limpia caracteres fuera del mapa Latin-1 para evitar errores de codificación en FPDF."""
+    """Limpia caracteres fuera del mapa Latin-1 para evitar colapsos en FPDF."""
     if not isinstance(texto, str):
         return str(texto)
     reemplazos = {
@@ -209,7 +264,6 @@ def sanitizar_texto(texto):
 
 
 def extraer_datos_y_graficos(lista_archivos):
-    """Procesa y extrae automáticamente texto, números y recortables gráficos de todos los PDF."""
     if not lista_archivos:
         return {}, {}
 
@@ -217,19 +271,13 @@ def extraer_datos_y_graficos(lista_archivos):
         lista_archivos = [lista_archivos]
 
     datos = {}
-    graficos = {
-        "shot_chart": None,
-        "timeline": None,
-        "passing_tercios": None,
-        "passing_bars": None
-    }
+    graficos = {"shot_chart": None, "passing_tercios": None}
     texto_consolidado = ""
 
     for file_obj in lista_archivos:
         nombre = file_obj.name.lower()
         file_bytes = file_obj.getvalue()
 
-        # 1. SI ES ARCHIVO CSV
         if nombre.endswith(".csv"):
             try:
                 df = pd.read_csv(io.BytesIO(file_bytes))
@@ -256,17 +304,14 @@ def extraer_datos_y_graficos(lista_archivos):
             except Exception as e:
                 st.error(f"Error procesando CSV {nombre}: {e}")
 
-        # 2. SI ES ARCHIVO PDF
         elif nombre.endswith(".pdf") and pdfplumber:
             try:
                 with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                    for i, page in enumerate(pdf.pages):
+                    for page in pdf.pages:
                         txt = page.extract_text() or ""
                         texto_consolidado += "\n" + txt
-
                         txt_lower = txt.lower()
 
-                        # Identificar Shot Chart
                         if "shot chart" in txt_lower or "overall" in txt_lower:
                             im = page.to_image(resolution=200).original
                             buf = io.BytesIO()
@@ -274,32 +319,17 @@ def extraer_datos_y_graficos(lista_archivos):
                             buf.seek(0)
                             graficos["shot_chart"] = buf
 
-                        # Identificar Box Score / Timeline
-                        elif "box score report" in txt_lower or "possession %" in txt_lower:
-                            im = page.to_image(resolution=200).original
-                            w, h = im.size
-                            # Recorte inferior para obtener la línea de tiempo del partido
-                            crop_timeline = im.crop((0, int(h * 0.45), w, h))
-                            buf = io.BytesIO()
-                            crop_timeline.save(buf, format="PNG")
-                            buf.seek(0)
-                            graficos["timeline"] = buf
-
-                        # Identificar Passing Stats
                         elif "passing stats" in txt_lower or "pass breakdown" in txt_lower:
                             im = page.to_image(resolution=200).original
                             w, h = im.size
-                            # Recorte de diagramas de canchas por tercios y barras
                             crop_passing = im.crop((0, int(h * 0.15), w, int(h * 0.85)))
                             buf = io.BytesIO()
                             crop_passing.save(buf, format="PNG")
                             buf.seek(0)
                             graficos["passing_tercios"] = buf
-
             except Exception as e:
                 st.error(f"Error al procesar PDF {nombre}: {e}")
 
-    # Expresiones regulares para completar datos cuantitativos
     if texto_consolidado:
         pos_m = re.search(r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)", texto_consolidado, re.IGNORECASE)
         if pos_m:
@@ -330,7 +360,7 @@ def extraer_datos_y_graficos(lista_archivos):
 
 
 # =====================================================================
-# 📑 CLASE Y MAQUETACIÓN FPDF (6 PÁGINAS PREMIUM)
+# 📑 FPDF REPORT GENERATOR
 # =====================================================================
 class PDFReporteFocus(FPDF):
 
@@ -361,14 +391,11 @@ def generar_pdf_6_paginas(data, graficos):
     eq_vis = sanitizar_texto(data["equipo_visita"])
     fec_str = sanitizar_texto(data["fecha"])
 
-    # -----------------------------------------------------------------
-    # PÁGINA 1: PORTADA NEGRA CON ESTILO CYBER-TECH
-    # -----------------------------------------------------------------
+    # PÁGINA 1
     pdf.add_page()
     pdf.set_fill_color(*DARK)
     pdf.rect(0, 0, 210, 297, "F")
 
-    # Logo Focus o Texto estilizado
     try:
         pdf.image(PATH_LOGO_FOCUS, x=75, y=30, w=60)
         pdf.set_y(100)
@@ -380,8 +407,8 @@ def generar_pdf_6_paginas(data, graficos):
         pdf.set_font("Helvetica", "B", 14)
         pdf.set_text_color(*ORANGE)
         pdf.cell(0, 8, "by AccuSport", ln=True, align="C")
-        pdf.ln(15)
 
+    pdf.ln(25)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*WHITE)
     pdf.cell(0, 10, "REPORTE DE ANÁLISIS DE PARTIDO", ln=True, align="C")
@@ -407,9 +434,7 @@ def generar_pdf_6_paginas(data, graficos):
     pdf.cell(0, 5, "Análisis basado en reportes de tagueo oficial", ln=True, align="C")
     pdf.cell(0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C")
 
-    # -----------------------------------------------------------------
-    # PÁGINA 2: ANÁLISIS GENERAL
-    # -----------------------------------------------------------------
+    # PÁGINA 2
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -420,7 +445,6 @@ def generar_pdf_6_paginas(data, graficos):
     pdf.cell(0, 6, f"{eq_loc} vs {eq_vis} - {fec_str}", ln=True)
     pdf.ln(3)
 
-    # Marcador
     pdf.set_fill_color(*DARK)
     pdf.rect(10, pdf.get_y(), 190, 22, "F")
     pdf.set_font("Helvetica", "B", 18)
@@ -434,12 +458,11 @@ def generar_pdf_6_paginas(data, graficos):
     )
     pdf.ln(12)
 
-    # Tarjetas de Indicadores Clave
+    # Cards
     pdf.set_fill_color(*GRAY_BG)
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(*TEXT_DARK)
 
-    # Fila de métricas
     y_cards = pdf.get_y()
     pdf.rect(10, y_cards, 44, 20, "F")
     pdf.rect(58, y_cards, 44, 20, "F")
@@ -468,7 +491,6 @@ def generar_pdf_6_paginas(data, graficos):
     pdf.cell(46, 8, "60%", align="C", ln=True)
     pdf.ln(12)
 
-    # Lectura General
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(0, 6, "Lectura general:", ln=True)
@@ -476,16 +498,13 @@ def generar_pdf_6_paginas(data, graficos):
     pdf.multi_cell(0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos registrados.")))
     pdf.ln(6)
 
-    # Tres conclusiones
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Tres conclusiones rápidas:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for conc in data.get("conclusiones", []):
         pdf.cell(0, 6, f"- {sanitizar_texto(conc)}", ln=True)
 
-    # -----------------------------------------------------------------
-    # PÁGINA 3: COMPARATIVO GENERAL
-    # -----------------------------------------------------------------
+    # PÁGINA 3
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -521,9 +540,7 @@ def generar_pdf_6_paginas(data, graficos):
         pdf.cell(50, 7, f" {sanitizar_texto(v1)}", 1, 0, "C")
         pdf.cell(50, 7, f" {sanitizar_texto(v2)}", 1, 1, "C")
 
-    # -----------------------------------------------------------------
-    # PÁGINA 4: ATAQUE Y DEFINICIÓN (INCLUYE IMAGEN DEL SHOT CHART)
-    # -----------------------------------------------------------------
+    # PÁGINA 4
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -536,15 +553,10 @@ def generar_pdf_6_paginas(data, graficos):
     if graficos.get("shot_chart"):
         try:
             pdf.image(graficos["shot_chart"], x=20, y=45, w=170)
-            pdf.set_y(180)
-        except Exception as e:
-            pdf.cell(0, 10, f"[Error al cargar imagen del Shot Chart: {e}]", ln=True)
-    else:
-        pdf.cell(0, 10, "[Mapa de remates cargado desde tagueo]", ln=True)
+        except Exception:
+            pdf.cell(0, 10, "[Error al renderizar Shot Chart]", ln=True)
 
-    # -----------------------------------------------------------------
-    # PÁGINA 5: POSESIÓN Y PASE (IMÁGENES EXTRAÍDAS DE TERCIO DE CANCHA)
-    # -----------------------------------------------------------------
+    # PÁGINA 5
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -557,20 +569,10 @@ def generar_pdf_6_paginas(data, graficos):
     if graficos.get("passing_tercios"):
         try:
             pdf.image(graficos["passing_tercios"], x=15, y=45, w=180)
-            pdf.set_y(190)
-        except Exception as e:
-            pdf.cell(0, 10, f"[Error al renderizar diagramas de pases: {e}]", ln=True)
-    else:
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, "Precisión de pase por tercios:", ln=True)
-        pdf.set_font("Helvetica", "", 10)
-        pdf.cell(0, 6, "- Tercio Defensivo: 55% precisión (29 intentos / 16 exitosos)", ln=True)
-        pdf.cell(0, 6, "- Tercio Medio: 80% precisión (30 intentos / 24 exitosos)", ln=True)
-        pdf.cell(0, 6, "- Tercio Ofensivo: 50% precisión (28 intentos / 14 exitosos)", ln=True)
+        except Exception:
+            pdf.cell(0, 10, "[Error al renderizar diagramas de pases]", ln=True)
 
-    # -----------------------------------------------------------------
-    # PÁGINA 6: CONCLUSIONES Y FOCOS DE TRABAJO
-    # -----------------------------------------------------------------
+    # PÁGINA 6
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
@@ -637,12 +639,8 @@ with tab_padres:
 
         df_partidos = obtener_datos_pestana("PARTIDOS")
         if not df_partidos.empty and "Equipo" in df_partidos.columns:
-            df_partidos["Equipo"] = (
-                df_partidos["Equipo"].astype(str).str.strip()
-            )
-            partidos_filtrados = df_partidos[
-                df_partidos["Equipo"] == equipo
-            ].copy()
+            df_partidos["Equipo"] = df_partidos["Equipo"].astype(str).str.strip()
+            partidos_filtrados = df_partidos[df_partidos["Equipo"] == equipo].copy()
 
             if not partidos_filtrados.empty:
                 for idx, row in partidos_filtrados.iterrows():
@@ -690,12 +688,8 @@ with tab_admin:
     st.write("### 🔑 Centro de Mando Focus")
 
     if not st.session_state.get("admin_autenticado", False):
-        usuario_admin = (
-            st.text_input("Usuario Operativo:", key="user_adm").strip().lower()
-        )
-        clave_admin = st.text_input(
-            "Contraseña de Seguridad:", type="password", key="pass_adm"
-        )
+        usuario_admin = st.text_input("Usuario Operativo:", key="user_adm").strip().lower()
+        clave_admin = st.text_input("Contraseña de Seguridad:", type="password", key="pass_adm")
         if st.button("Autenticar Servidor", key="btn_admin_login"):
             if "admins" in st.secrets:
                 dict_admins = st.secrets["admins"]
@@ -724,10 +718,9 @@ with tab_admin:
 
         if opcion_admin == "📄 Generar Reporte de Análisis PDF (Tagueo CSV / PDF)":
             st.write("#### 📊 Generador de Reportes de 6 Páginas Focus")
-            st.info("💡 **Instrucción:** Puedes seleccionar y subir simultáneamente los 4 archivos PDF de tagueo (Aurinegro 1, 2, 3 y 4). El sistema extraerá de forma automática los números y recortará los gráficos.")
 
             archivos_tagueo = st.file_uploader(
-                "Sube aquí TODOS los archivos PDF de Tagueo (Aurinegro 1, 2, 3, 4):",
+                "Sube los archivos PDF de Tagueo (Aurinegro 1, 2, 3, 4):",
                 type=["csv", "pdf"],
                 accept_multiple_files=True,
             )
@@ -746,36 +739,34 @@ with tab_admin:
             with col_g2:
                 g_visita = st.number_input("Goles Visitante:", min_value=0, value=2)
 
-            lectura_gen = st.text_area(
-                "Lectura General del Partido:",
-                value="Fortaleza 2017 B ganó 5-2 combinando dos rasgos decisivos: alta eficiencia ofensiva y solidez defensiva.",
-            )
+            if st.button("🤖 GENERAR ANÁLISIS TÁCTICO AUTOMÁTICO CON GEMINI IA", use_container_width=True):
+                if archivos_tagueo:
+                    with st.spinner("Gemini IA está analizando los datos numéricos y tácticos del partido..."):
+                        datos_extraidos, _ = extraer_datos_y_graficos(archivos_tagueo)
+                        analisis_ia = generar_analisis_tactico_gemini(datos_extraidos, eq_local, eq_visita)
 
-            conc_1 = st.text_input(
-                "Conclusión 1:",
-                value="La diferencia del partido estuvo más asociada a la eficacia que al volumen.",
-            )
-            conc_2 = st.text_input(
-                "Conclusión 2:",
-                value="El mejor registro de pase apareció en el tercio medio: 80% de precisión.",
-            )
-            conc_3 = st.text_input(
-                "Conclusión 3:",
-                value="La estructura defensiva limitó al rival a solo 2 goles en 34 remates.",
-            )
+                        if analisis_ia:
+                            st.session_state["lectura_gen"] = analisis_ia.get("lectura_general", "")
+                            concs = analisis_ia.get("conclusiones", ["", "", ""])
+                            st.session_state["conc_1"] = concs[0] if len(concs) > 0 else ""
+                            st.session_state["conc_2"] = concs[1] if len(concs) > 1 else ""
+                            st.session_state["conc_3"] = concs[2] if len(concs) > 2 else ""
+                            st.session_state["asp_cons"] = ", ".join(analisis_ia.get("aspectos_conservar", []))
+                            st.session_state["asp_corr"] = ", ".join(analisis_ia.get("aspectos_corregir", []))
+                            st.session_state["foc_ent"] = ", ".join(analisis_ia.get("focos_entrenamiento", []))
+                            st.success("✨ ¡Análisis completado exitosamente por Gemini!")
+                else:
+                    st.warning("⚠️ Sube primero los archivos PDF de tagueo para que Gemini pueda leer las estadísticas.")
 
-            asp_cons = st.text_area(
-                "Aspectos a conservar (separados por coma):",
-                value="Definición eficiente, Inicio de partido arrollador, Defensa y marca sólida",
-            )
-            asp_corr = st.text_area(
-                "Aspectos a corregir (separados por coma):",
-                value="Control del volumen rival, Salida bajo presión, Conexión en último tercio",
-            )
-            foc_ent = st.text_area(
-                "Focos de entrenamiento (separados por coma):",
-                value="Sostener el bloque defensivo, Salida y progresión rápida, Conexión en último tercio",
-            )
+            st.write("---")
+            lectura_gen = st.text_area("Lectura General del Partido:", value=st.session_state["lectura_gen"])
+            conc_1 = st.text_input("Conclusión 1:", value=st.session_state["conc_1"])
+            conc_2 = st.text_input("Conclusión 2:", value=st.session_state["conc_2"])
+            conc_3 = st.text_input("Conclusión 3:", value=st.session_state["conc_3"])
+
+            asp_cons = st.text_area("Aspectos a conservar (separados por coma):", value=st.session_state["asp_cons"])
+            asp_corr = st.text_area("Aspectos a corregir (separados por coma):", value=st.session_state["asp_corr"])
+            foc_ent = st.text_area("Focos de entrenamiento (separados por coma):", value=st.session_state["foc_ent"])
 
             if st.button("🚀 GENERAR Y DESCARGAR PDF DE 6 PÁGINAS", use_container_width=True):
                 datos_extraidos, graficos_extraidos = (
@@ -790,15 +781,9 @@ with tab_admin:
                     "goles_visita": g_visita,
                     "lectura_general": lectura_gen,
                     "conclusiones": [conc_1, conc_2, conc_3],
-                    "aspectos_conservar": [
-                        x.strip() for x in asp_cons.split(",") if x.strip()
-                    ],
-                    "aspectos_corregir": [
-                        x.strip() for x in asp_corr.split(",") if x.strip()
-                    ],
-                    "focos_entrenamiento": [
-                        x.strip() for x in foc_ent.split(",") if x.strip()
-                    ],
+                    "aspectos_conservar": [x.strip() for x in asp_cons.split(",") if x.strip()],
+                    "aspectos_corregir": [x.strip() for x in asp_corr.split(",") if x.strip()],
+                    "focos_entrenamiento": [x.strip() for x in foc_ent.split(",") if x.strip()],
                     **datos_extraidos,
                 }
 
@@ -816,14 +801,7 @@ with tab_admin:
             if st.button("🚀 CREAR EQUIPO") and nuevo_equipo:
                 exito = agregar_fila_excel(
                     "PARTIDOS",
-                    [
-                        nuevo_equipo,
-                        datetime.now().strftime("%d/%m/%Y"),
-                        "Bienvenida",
-                        "Listo",
-                        "https://drive.google.com",
-                        0,
-                    ],
+                    [nuevo_equipo, datetime.now().strftime("%d/%m/%Y"), "Bienvenida", "Listo", "https://drive.google.com", 0],
                 )
                 if exito:
                     st.success(f"Equipo {nuevo_equipo} creado con éxito.")
@@ -834,9 +812,7 @@ with tab_admin:
             equipo_u = st.text_input("Categoría / Equipo:")
             if st.button("💾 Guardar Cliente", use_container_width=True):
                 if nombre_papa and nombre_hijo:
-                    exito = agregar_fila_excel(
-                        "USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u]
-                    )
+                    exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
                     if exito:
                         st.success(f"👤 Jugador {nombre_hijo} guardado con éxito.")
 
@@ -848,14 +824,9 @@ with tab_admin:
             if st.button("💾 Publicar Partido", use_container_width=True):
                 if rival_sel:
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
-                    exito = agregar_fila_excel(
-                        "PARTIDOS",
-                        [equipo_sel, fecha_str, rival_sel, "Listo", link_sel, 0],
-                    )
+                    exito = agregar_fila_excel("PARTIDOS", [equipo_sel, fecha_str, rival_sel, "Listo", link_sel, 0])
                     if exito:
-                        crear_evento_google_calendar(
-                            FOCUS_CALENDAR_DEFAULT, rival_sel, fecha_sel, equipo_sel
-                        )
+                        crear_evento_google_calendar(FOCUS_CALENDAR_DEFAULT, rival_sel, fecha_sel, equipo_sel)
                         st.success("✅ Guardado y agendado en Google Calendar.")
 
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
@@ -868,9 +839,7 @@ with tab_admin:
                     st.success("💳 Registrado en tesorería.")
 
         elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
-            tabla_sel = st.radio(
-                "Selecciona tabla:", ["USUARIOS", "PARTIDOS", "PAGOS_MENSUALES"]
-            )
+            tabla_sel = st.radio("Selecciona tabla:", ["USUARIOS", "PARTIDOS", "PAGOS_MENSUALES"])
             df_audit = obtener_datos_pestana(tabla_sel)
             st.dataframe(df_audit, use_container_width=True)
 
