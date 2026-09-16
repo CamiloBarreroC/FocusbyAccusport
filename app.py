@@ -810,13 +810,13 @@ def extraer_datos_jugador_gemini(texto_pdf):
 
         prompt = f"""
         Actúa como especialista en analítica de datos deportivos de AccuSport Colombia.
-        Extrae la información individual del siguiente texto extraído de un reporte de tagueo de jugador (PDF de Hudl/Focus):
+        Extrae la información individual del siguiente texto extraído de uno o varios reportes de tagueo de jugador (PDF de Hudl/Focus):
 
         TEXTO EXTRAÍDO DEL TAGUEO INDIVIDUAL:
         {texto_pdf}
 
         Instrucciones:
-        Extrae los valores exactos encontrados en el reporte. Si alguna variable no aparece, pon 0 o 'N/A'.
+        Consolida y extrae los valores exactos encontrados en el reporte. Si alguna variable no aparece, pon 0 o 'N/A'.
 
         Responde en formato JSON estricto con la siguiente estructura:
         {{
@@ -876,7 +876,6 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
         rec = int(data_jugador.get("recuperaciones", 0))
         duel = int(data_jugador.get("duelos_def_ganados", 0))
 
-        # Buscar si el jugador ya tiene Foto_URL guardada
         foto_url = ""
         try:
             ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
@@ -930,7 +929,6 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
             prec_p = f"{round((pc_tot / max(1, pi_tot)) * 100, 1)}%"
             rec_tot = int(pd.to_numeric(df_jug["Recuperaciones"], errors="coerce").sum())
 
-            # Verificar si existe en la tabla de acumulados
             cell_found = None
             try:
                 cell_found = ws_acum.find(nom)
@@ -955,10 +953,8 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
             ]
 
             if cell_found:
-                # Actualizar fila existente
                 ws_acum.update(f"A{cell_found.row}:N{cell_found.row}", [fila_acum])
             else:
-                # Crear nueva fila
                 ws_acum.append_row(fila_acum)
 
         return True
@@ -1156,7 +1152,6 @@ def generar_pdf_6_paginas(
     pdf.cell(0, 6, f"{eq_loc} vs {eq_vis} - {fec_str}", ln=True)
     pdf.ln(2)
 
-    # Marcador Central
     pdf.set_fill_color(*DARK)
     pdf.rect(12, pdf.get_y(), 186, 18, "F")
     pdf.set_font("Helvetica", "B", 15)
@@ -1171,7 +1166,6 @@ def generar_pdf_6_paginas(
     )
     pdf.ln(8)
 
-    # Grilla de Tarjetas Métricas
     pdf.set_fill_color(*GRAY_BG)
     y_cards = pdf.get_y()
     w_card = 43
@@ -1208,7 +1202,6 @@ def generar_pdf_6_paginas(
     )
     pdf.ln(8)
 
-    # Bloque Lectura General
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 10.5)
     pdf.set_text_color(*TEXT_DARK)
@@ -1220,7 +1213,6 @@ def generar_pdf_6_paginas(
     )
     pdf.ln(4)
 
-    # Conclusiones Clave
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 10.5)
     pdf.cell(0, 5, "Conclusiones Clave del Encuentro:", ln=True)
@@ -1423,7 +1415,6 @@ def generar_pdf_6_paginas(
         pdf.multi_cell(0, 5, sanitizar_texto(f"- {foc}"))
         pdf.ln(1)
 
-    # NOTA DE CRÉDITO INSTITUCIONAL DE CIERRE
     pdf.ln(10)
     pdf.set_x(12)
     pdf.set_font("Helvetica", "I", 8.5)
@@ -1724,11 +1715,13 @@ with tab_admin:
         elif opcion_admin == "👤 Ingestar Tagueo Individual de Jugador (PDF)":
             st.write("#### 📥 Ingesta Automática de Tagueo Individual")
             st.write(
-                "Sube el archivo PDF del tagueo de un jugador (ej. `Barrero 2.pdf`). AccusIA extraerá sus métricas y actualizará automáticamente la base de datos de Google Sheets."
+                "Sube los archivos PDF del tagueo de un jugador (puedes seleccionar varios a la vez, ej. `Barrero.pdf` y `Barrero 2.pdf`). AccusIA extraerá sus métricas y actualizará automáticamente la base de datos en Google Sheets."
             )
 
-            file_jugador = st.file_uploader(
-                "Selecciona el reporte PDF del jugador:", type=["pdf"]
+            files_jugador = st.file_uploader(
+                "Selecciona los reportes PDF del jugador:",
+                type=["pdf"],
+                accept_multiple_files=True,
             )
 
             col_j1, col_j2, col_j3 = st.columns(3)
@@ -1740,9 +1733,9 @@ with tab_admin:
                 fec_j = st.text_input("Fecha:", value="12/09/2026")
 
             if st.button("🚀 INGESTAR METRICAS A GOOGLE SHEETS", use_container_width=True):
-                if file_jugador:
+                if files_jugador:
                     with st.spinner("AccusIA está procesando las métricas del jugador..."):
-                        txt_jugador, _ = extraer_datos_y_graficos([file_jugador])
+                        txt_jugador, _ = extraer_datos_y_graficos(files_jugador)
                         json_data = extraer_datos_jugador_gemini(txt_jugador)
 
                         if json_data:
@@ -1755,7 +1748,7 @@ with tab_admin:
                                 )
                                 st.json(json_data)
                 else:
-                    st.warning("⚠️ Sube primero el reporte PDF del jugador.")
+                    st.warning("⚠️ Sube al menos un reporte PDF del jugador.")
 
         elif opcion_admin == "📸 Cargar Foto de Jugador (Perfil / Scouting)":
             st.write("#### 📸 Cargar Fotografía Oficial de Perfil")
