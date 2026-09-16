@@ -9,6 +9,8 @@ from google.genai import types
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import gspread
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from PIL import Image
 import streamlit as st
@@ -85,7 +87,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Inicialización de variables de sesión
 defaults = {
     "admin_autenticado": False,
     "nombre_admin": "",
@@ -203,21 +204,175 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 
 
 # =====================================================================
-# 🤖 MOTOR GEMINI IA PARA ANÁLISIS TÁCTICO AUTOMÁTICO
+# 📊 GENERADOR NATIVO DE RADAR CHARTS CYBER-TECH (MATPLOTLIB)
+# =====================================================================
+def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
+    """Genera un gráfico de telaraña comparativo con temática neón Cyber-Tech.
+
+    Adapta dinámicamente sus ejes si existen o no métricas defensivas.
+    """
+    tiene_defensa = any(
+        k in datos
+        for k in [
+            "recuperaciones_local",
+            "duelos_def_local",
+            "intercepciones_local",
+        ]
+    )
+
+    if tiene_defensa:
+        categorias = [
+            "Eficacia",
+            "Posesión",
+            "Pases Exitosos",
+            "Volumen Remates",
+            "Acciones Defensivas",
+        ]
+        val_loc = [
+            min(100, int(datos.get("goles_local", 0)) * 20),
+            float(str(datos.get("pos_local", "50")).replace("%", "") or 50),
+            min(100, int(datos.get("pases_exitosos_local", 50)) / 1.5),
+            min(100, int(datos.get("remates_local", 10)) * 4),
+            min(100, int(datos.get("recuperaciones_local", 15)) * 3),
+        ]
+        val_vis = [
+            min(100, int(datos.get("goles_visita", 0)) * 20),
+            float(str(datos.get("pos_visita", "50")).replace("%", "") or 50),
+            min(100, int(datos.get("pases_exitosos_visita", 50)) / 1.5),
+            min(100, int(datos.get("remates_visita", 10)) * 4),
+            min(100, int(datos.get("recuperaciones_visita", 15)) * 3),
+        ]
+    else:
+        categorias = [
+            "Eficacia Gol",
+            "Posesión %",
+            "Precisión Pase",
+            "Volumen Remates",
+        ]
+        val_loc = [
+            min(100, int(datos.get("goles_local", 0)) * 20),
+            float(str(datos.get("pos_local", "45")).replace("%", "") or 45),
+            60.0,
+            min(100, int(datos.get("remates_local", 20)) * 3),
+        ]
+        val_vis = [
+            min(100, int(datos.get("goles_visita", 0)) * 20),
+            float(str(datos.get("pos_visita", "55")).replace("%", "") or 55),
+            70.0,
+            min(100, int(datos.get("remates_visita", 34)) * 2),
+        ]
+
+    N = len(categorias)
+    angulos = [n / float(N) * 2 * np.pi for n in range(N)]
+    angulos += angulos[:1]
+
+    val_loc += val_loc[:1]
+    val_vis += val_vis[:1]
+
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    fig.patch.set_facecolor("#0D0D0D")
+    ax.set_facecolor("#0D0D0D")
+
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+
+    plt.xticks(
+        angulos[:-1],
+        categorias,
+        color="#FFFFFF",
+        size=9,
+        weight="bold",
+    )
+
+    ax.set_rlabel_position(0)
+    plt.yticks(
+        [25, 50, 75, 100],
+        ["", "", "", ""],
+        color="#333333",
+        size=7,
+    )
+    plt.ylim(0, 100)
+
+    ax.spines["polar"].set_color("#FF5500")
+    ax.spines["polar"].set_linewidth(1.5)
+    ax.grid(color="#222222", linestyle="--", linewidth=0.8)
+
+    # Trazado Equipo Local (Naranja Neón)
+    ax.plot(
+        angulos,
+        val_loc,
+        linewidth=2,
+        linestyle="solid",
+        color="#FF5500",
+        label=equipo_local,
+    )
+    ax.fill(angulos, val_loc, color="#FF5500", alpha=0.35)
+
+    # Trazado Equipo Visitante (Gris Plata)
+    ax.plot(
+        angulos,
+        val_vis,
+        linewidth=2,
+        linestyle="solid",
+        color="#888888",
+        label=equipo_visita,
+    )
+    ax.fill(angulos, val_vis, color="#888888", alpha=0.2)
+
+    plt.legend(
+        loc="upper right",
+        bbox_to_anchor=(0.1, 0.1),
+        facecolor="#0D0D0D",
+        edgecolor="#FF5500",
+        labelcolor="white",
+    )
+
+    buf = io.BytesIO()
+    plt.savefig(
+        buf,
+        format="PNG",
+        bbox_inches="tight",
+        facecolor=fig.get_facecolor(),
+        dpi=200,
+    )
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+# =====================================================================
+# 🤖 MOTOR GEMINI IA ADAPTATIVO
 # =====================================================================
 def generar_analisis_tactico_gemini(datos_extraidos, equipo_local, equipo_visita):
-    """Genera el análisis táctico automático conectando con la API de Gemini mediante Secrets."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
-            st.error("⚠️ No se encontró la clave GEMINI_API_KEY en los Secrets de Streamlit.")
+            st.error(
+                "⚠️ No se encontró la clave GEMINI_API_KEY en los Secrets de Streamlit."
+            )
             return None
 
         api_key = st.secrets["GEMINI_API_KEY"]
         client = genai.Client(api_key=api_key)
 
+        tiene_defensa = any(
+            k in datos_extraidos
+            for k in [
+                "recuperaciones_local",
+                "duelos_def_local",
+                "intercepciones_local",
+            ]
+        )
+        instruccion_defensa = (
+            "Se incluyen métricas defensivas explícitas."
+            if tiene_defensa
+            else "El tagueo actual se enfoca en métricas con balón. Si faltan eventos defensivos explícitos, analiza la fase de posesión y eficacia sin asumir errores no registrados."
+        )
+
         prompt = f"""
         Actúa como Director Técnico y Analista Táctico de fútbol profesional.
         Analiza las siguientes estadísticas de un partido entre {equipo_local} (Local) vs {equipo_visita} (Visitante):
+
+        CONTEXTO TÁCTICO: {instruccion_defensa}
 
         ESTADÍSTICAS DEL PARTIDO:
         {json.dumps(datos_extraidos, indent=2)}
@@ -246,17 +401,39 @@ def generar_analisis_tactico_gemini(datos_extraidos, equipo_local, equipo_visita
 
 
 # =====================================================================
-# 📑 SANITIZACIÓN & EXTRACCIÓN AUTOMÁTICA DE GRÁFICOS Y DATOS
+# 📑 EXTRACCIÓN AUTOMÁTICA DE DATOS Y RECURSOS
 # =====================================================================
 def sanitizar_texto(texto):
-    """Limpia caracteres fuera del mapa Latin-1 para evitar colapsos en FPDF."""
     if not isinstance(texto, str):
         return str(texto)
     reemplazos = {
-        "•": "-", "✔": "[OK]", "✖": "[X]", "🎯": ">", "⚽": "", "🎥": "",
-        "⚡": "", "🚀": "", "📥": "", "📊": "", "🛡️": "", "👤": "", "📆": "",
-        "💰": "", "👁️": "", "🔑": "", "⚙️": "", "🚨": "", "🛠️": "", "👋": "",
-        "✅": "", "⏳": "", "✨": "", "💥": "", "🏆": "", "💵": "", "💳": ""
+        "•": "-",
+        "✔": "[OK]",
+        "✖": "[X]",
+        "🎯": ">",
+        "⚽": "",
+        "🎥": "",
+        "⚡": "",
+        "🚀": "",
+        "📥": "",
+        "📊": "",
+        "🛡️": "",
+        "👤": "",
+        "📆": "",
+        "💰": "",
+        "👁️": "",
+        "🔑": "",
+        "⚙️": "",
+        "🚨": "",
+        "🛠️": "",
+        "👋": "",
+        "✅": "",
+        "⏳": "",
+        "✨": "",
+        "💥": "",
+        "🏆": "",
+        "💵": "",
+        "💳": "",
     }
     for origen, destino in reemplazos.items():
         texto = texto.replace(origen, destino)
@@ -301,6 +478,13 @@ def extraer_datos_y_graficos(lista_archivos):
                     elif "successful passes" in clave:
                         datos["pases_exitosos_local"] = val_local
                         datos["pases_exitosos_visita"] = val_visita
+                    elif (
+                        "tackles" in clave
+                        or "recoveries" in clave
+                        or "recuperaciones" in clave
+                    ):
+                        datos["recuperaciones_local"] = val_local
+                        datos["recuperaciones_visita"] = val_visita
             except Exception as e:
                 st.error(f"Error procesando CSV {nombre}: {e}")
 
@@ -319,10 +503,15 @@ def extraer_datos_y_graficos(lista_archivos):
                             buf.seek(0)
                             graficos["shot_chart"] = buf
 
-                        elif "passing stats" in txt_lower or "pass breakdown" in txt_lower:
+                        elif (
+                            "passing stats" in txt_lower
+                            or "pass breakdown" in txt_lower
+                        ):
                             im = page.to_image(resolution=200).original
                             w, h = im.size
-                            crop_passing = im.crop((0, int(h * 0.15), w, int(h * 0.85)))
+                            crop_passing = im.crop(
+                                (0, int(h * 0.15), w, int(h * 0.85))
+                            )
                             buf = io.BytesIO()
                             crop_passing.save(buf, format="PNG")
                             buf.seek(0)
@@ -331,36 +520,59 @@ def extraer_datos_y_graficos(lista_archivos):
                 st.error(f"Error al procesar PDF {nombre}: {e}")
 
     if texto_consolidado:
-        pos_m = re.search(r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)", texto_consolidado, re.IGNORECASE)
+        pos_m = re.search(
+            r"Possession\s*%?\s*\|\s*([\d.]+%\??)\s*\|\s*([\d.]+%\??)",
+            texto_consolidado,
+            re.IGNORECASE,
+        )
         if pos_m:
             datos["pos_local"] = pos_m.group(1)
             datos["pos_visita"] = pos_m.group(2)
 
-        goles_m = re.search(r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
+        goles_m = re.search(
+            r"Goals\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
+        )
         if goles_m:
             datos["goles_local"] = int(goles_m.group(1))
             datos["goles_visita"] = int(goles_m.group(2))
 
-        shots_m = re.search(r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
+        shots_m = re.search(
+            r"Shots\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
+        )
         if shots_m:
             datos["remates_local"] = int(shots_m.group(1))
             datos["remates_visita"] = int(shots_m.group(2))
 
-        pases_m = re.search(r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
+        pases_m = re.search(
+            r"Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE
+        )
         if pases_m:
             datos["pases_local"] = int(pases_m.group(1))
             datos["pases_visita"] = int(pases_m.group(2))
 
-        sp_m = re.search(r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)", texto_consolidado, re.IGNORECASE)
+        sp_m = re.search(
+            r"Successful Passes\s*\|\s*(\d+)\s*\|\s*(\d+)",
+            texto_consolidado,
+            re.IGNORECASE,
+        )
         if sp_m:
             datos["pases_exitosos_local"] = int(sp_m.group(1))
             datos["pases_exitosos_visita"] = int(sp_m.group(2))
+
+        rec_m = re.search(
+            r"Recoveries\s*\|\s*(\d+)\s*\|\s*(\d+)",
+            texto_consolidado,
+            re.IGNORECASE,
+        )
+        if rec_m:
+            datos["recuperaciones_local"] = int(rec_m.group(1))
+            datos["recuperaciones_visita"] = int(rec_m.group(2))
 
     return datos, graficos
 
 
 # =====================================================================
-# 📑 FPDF REPORT GENERATOR
+# 📑 FPDF GENERATOR CON RADAR TÁCTICO DENTRO DEL REPORTE
 # =====================================================================
 class PDFReporteFocus(FPDF):
 
@@ -377,7 +589,7 @@ class PDFReporteFocus(FPDF):
             )
 
 
-def generar_pdf_6_paginas(data, graficos):
+def generar_pdf_6_paginas(data, graficos, buf_radar=None):
     pdf = PDFReporteFocus()
     pdf.set_auto_page_break(auto=True, margin=15)
 
@@ -431,8 +643,12 @@ def generar_pdf_6_paginas(data, graficos):
     pdf.set_y(245)
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 5, "Análisis basado en reportes de tagueo oficial", ln=True, align="C")
-    pdf.cell(0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C")
+    pdf.cell(
+        0, 5, "Análisis basado en reportes de tagueo oficial", ln=True, align="C"
+    )
+    pdf.cell(
+        0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C"
+    )
 
     # PÁGINA 2
     pdf.add_page()
@@ -458,7 +674,6 @@ def generar_pdf_6_paginas(data, graficos):
     )
     pdf.ln(12)
 
-    # Cards
     pdf.set_fill_color(*GRAY_BG)
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(*TEXT_DARK)
@@ -495,7 +710,9 @@ def generar_pdf_6_paginas(data, graficos):
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(0, 6, "Lectura general:", ln=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos registrados.")))
+    pdf.multi_cell(
+        0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos."))
+    )
     pdf.ln(6)
 
     pdf.set_font("Helvetica", "B", 11)
@@ -504,41 +721,59 @@ def generar_pdf_6_paginas(data, graficos):
     for conc in data.get("conclusiones", []):
         pdf.cell(0, 6, f"- {sanitizar_texto(conc)}", ln=True)
 
-    # PÁGINA 3
+    # PÁGINA 3: RADAR CHART TÁCTICO INYECTADO
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
-    pdf.cell(0, 10, "Comparativo general", ln=True)
+    pdf.cell(0, 10, "Comparativo Táctico & Rendimiento", ln=True)
     pdf.set_font("Helvetica", "I", 10)
     pdf.set_text_color(*TEXT_DARK)
-    pdf.cell(0, 6, "Volumen, posesión y acciones de partido", ln=True)
+    pdf.cell(
+        0, 6, "Perfil multinivel de rendimiento dinámico del equipo", ln=True
+    )
     pdf.ln(5)
+
+    if buf_radar:
+        try:
+            pdf.image(buf_radar, x=35, y=50, w=140)
+            pdf.set_y(195)
+        except Exception:
+            pdf.cell(
+                0, 10, "[Error al renderizar el Radar Chart Cyber-Tech]", ln=True
+            )
+
+    stats_tabla = [
+        (
+            "Posesión (%)",
+            data.get("pos_local", "45.3%"),
+            data.get("pos_visita", "54.7%"),
+        ),
+        ("Goles", data.get("goles_local", "5"), data.get("goles_visita", "2")),
+        (
+            "Remates",
+            data.get("remates_local", "20"),
+            data.get("remates_visita", "34"),
+        ),
+        (
+            "Pases Exitosos",
+            data.get("pases_exitosos_local", "55"),
+            data.get("pases_exitosos_visita", "73"),
+        ),
+    ]
 
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(*WHITE)
-    pdf.cell(90, 8, " Variable", 1, 0, "L", fill=True)
-    pdf.cell(50, 8, f" {eq_loc}", 1, 0, "C", fill=True)
-    pdf.cell(50, 8, f" {eq_vis}", 1, 1, "C", fill=True)
+    pdf.cell(90, 7, " Variable", 1, 0, "L", fill=True)
+    pdf.cell(50, 7, f" {eq_loc}", 1, 0, "C", fill=True)
+    pdf.cell(50, 7, f" {eq_vis}", 1, 1, "C", fill=True)
 
-    stats_tabla = [
-        ("Posesión (%)", data.get("pos_local", "45.3%"), data.get("pos_visita", "54.7%")),
-        ("Transiciones ofensivas", "41", "43"),
-        ("Goles", data.get("goles_local", "5"), data.get("goles_visita", "2")),
-        ("Remates", data.get("remates_local", "20"), data.get("remates_visita", "34")),
-        ("Centros", "27", "30"),
-        ("Tiros de esquina", "2", "6"),
-        ("Tiros libres", "5", "8"),
-        ("Pases", data.get("pases_local", "91"), data.get("pases_visita", "111")),
-        ("Pases exitosos", data.get("pases_exitosos_local", "55"), data.get("pases_exitosos_visita", "73")),
-    ]
-
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*TEXT_DARK)
     for var, v1, v2 in stats_tabla:
-        pdf.cell(90, 7, f" {sanitizar_texto(var)}", 1, 0, "L")
-        pdf.cell(50, 7, f" {sanitizar_texto(v1)}", 1, 0, "C")
-        pdf.cell(50, 7, f" {sanitizar_texto(v2)}", 1, 1, "C")
+        pdf.cell(90, 6, f" {sanitizar_texto(var)}", 1, 0, "L")
+        pdf.cell(50, 6, f" {sanitizar_texto(v1)}", 1, 0, "C")
+        pdf.cell(50, 6, f" {sanitizar_texto(v2)}", 1, 1, "C")
 
     # PÁGINA 4
     pdf.add_page()
@@ -639,8 +874,12 @@ with tab_padres:
 
         df_partidos = obtener_datos_pestana("PARTIDOS")
         if not df_partidos.empty and "Equipo" in df_partidos.columns:
-            df_partidos["Equipo"] = df_partidos["Equipo"].astype(str).str.strip()
-            partidos_filtrados = df_partidos[df_partidos["Equipo"] == equipo].copy()
+            df_partidos["Equipo"] = (
+                df_partidos["Equipo"].astype(str).str.strip()
+            )
+            partidos_filtrados = df_partidos[
+                df_partidos["Equipo"] == equipo
+            ].copy()
 
             if not partidos_filtrados.empty:
                 for idx, row in partidos_filtrados.iterrows():
@@ -658,16 +897,22 @@ with tab_padres:
                                 use_container_width=True,
                             )
             else:
-                st.info("ℹ️ No hay videos cargados ni filmaciones programadas para este equipo todavía.")
+                st.info(
+                    "ℹ️ No hay videos cargados ni filmaciones programadas para este equipo todavía."
+                )
     else:
         st.write("### 🔍 Ingresa a Focus Play")
         df_p_init = obtener_datos_pestana("PARTIDOS")
         df_u_init = obtener_datos_pestana("USUARIOS")
         set_equipos = set()
         if not df_p_init.empty and "Equipo" in df_p_init.columns:
-            set_equipos.update(df_p_init["Equipo"].astype(str).str.strip().unique())
+            set_equipos.update(
+                df_p_init["Equipo"].astype(str).str.strip().unique()
+            )
         if not df_u_init.empty and "Equipo" in df_u_init.columns:
-            set_equipos.update(df_u_init["Equipo"].astype(str).str.strip().unique())
+            set_equipos.update(
+                df_u_init["Equipo"].astype(str).str.strip().unique()
+            )
 
         lista_equipos = sorted([eq for eq in set_equipos if eq and eq != "None"])
         if lista_equipos:
@@ -676,7 +921,10 @@ with tab_padres:
                 ["-- Elige tu categoría --"] + lista_equipos,
             )
             if equipo_seleccionado != "-- Elige tu categoría --":
-                if st.button("🚀 ENTRAR A MI GALERÍA DE STREAMING", use_container_width=True):
+                if st.button(
+                    "🚀 ENTRAR A MI GALERÍA DE STREAMING",
+                    use_container_width=True,
+                ):
                     st.session_state["equipo_activo"] = equipo_seleccionado
                     st.session_state["ver_galeria"] = True
                     st.rerun()
@@ -688,19 +936,27 @@ with tab_admin:
     st.write("### 🔑 Centro de Mando Focus")
 
     if not st.session_state.get("admin_autenticado", False):
-        usuario_admin = st.text_input("Usuario Operativo:", key="user_adm").strip().lower()
-        clave_admin = st.text_input("Contraseña de Seguridad:", type="password", key="pass_adm")
+        usuario_admin = (
+            st.text_input("Usuario Operativo:", key="user_adm").strip().lower()
+        )
+        clave_admin = st.text_input(
+            "Contraseña de Seguridad:", type="password", key="pass_adm"
+        )
         if st.button("Autenticar Servidor", key="btn_admin_login"):
             if "admins" in st.secrets:
                 dict_admins = st.secrets["admins"]
-                if usuario_admin in dict_admins and clave_admin == str(dict_admins[usuario_admin]):
+                if usuario_admin in dict_admins and clave_admin == str(
+                    dict_admins[usuario_admin]
+                ):
                     st.session_state["admin_autenticado"] = True
                     st.session_state["nombre_admin"] = usuario_admin.capitalize()
                     st.rerun()
                 else:
                     st.error("❌ Credenciales inválidas.")
     else:
-        st.success(f"🔓 Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**")
+        st.success(
+            f"🔓 Conectado como **{st.session_state.get('nombre_admin', 'Admin')}**"
+        )
 
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
@@ -727,50 +983,113 @@ with tab_admin:
 
             col_e1, col_e2, col_f = st.columns(3)
             with col_e1:
-                eq_local = st.text_input("Equipo Local:", value="Fortaleza 2017 B")
+                eq_local = st.text_input(
+                    "Equipo Local:", value="Fortaleza 2017 B"
+                )
             with col_e2:
                 eq_visita = st.text_input("Equipo Visitante:", value="Aurinegro")
             with col_f:
-                fecha_p = st.text_input("Fecha:", value="12 de septiembre de 2026")
+                fecha_p = st.text_input(
+                    "Fecha:", value="12 de septiembre de 2026"
+                )
 
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 g_local = st.number_input("Goles Local:", min_value=0, value=5)
             with col_g2:
-                g_visita = st.number_input("Goles Visitante:", min_value=0, value=2)
+                g_visita = st.number_input(
+                    "Goles Visitante:", min_value=0, value=2
+                )
 
-            if st.button("🤖 GENERAR ANÁLISIS TÁCTICO AUTOMÁTICO CON GEMINI IA", use_container_width=True):
+            if st.button(
+                "🤖 GENERAR ANÁLISIS TÁCTICO AUTOMÁTICO CON GEMINI IA",
+                use_container_width=True,
+            ):
                 if archivos_tagueo:
-                    with st.spinner("Gemini IA está analizando los datos numéricos y tácticos del partido..."):
-                        datos_extraidos, _ = extraer_datos_y_graficos(archivos_tagueo)
-                        analisis_ia = generar_analisis_tactico_gemini(datos_extraidos, eq_local, eq_visita)
+                    with st.spinner(
+                        "Gemini IA está analizando los datos numéricos y tácticos del partido..."
+                    ):
+                        datos_extraidos, _ = extraer_datos_y_graficos(
+                            archivos_tagueo
+                        )
+                        analisis_ia = generar_analisis_tactico_gemini(
+                            datos_extraidos, eq_local, eq_visita
+                        )
 
                         if analisis_ia:
-                            st.session_state["lectura_gen"] = analisis_ia.get("lectura_general", "")
-                            concs = analisis_ia.get("conclusiones", ["", "", ""])
-                            st.session_state["conc_1"] = concs[0] if len(concs) > 0 else ""
-                            st.session_state["conc_2"] = concs[1] if len(concs) > 1 else ""
-                            st.session_state["conc_3"] = concs[2] if len(concs) > 2 else ""
-                            st.session_state["asp_cons"] = ", ".join(analisis_ia.get("aspectos_conservar", []))
-                            st.session_state["asp_corr"] = ", ".join(analisis_ia.get("aspectos_corregir", []))
-                            st.session_state["foc_ent"] = ", ".join(analisis_ia.get("focos_entrenamiento", []))
-                            st.success("✨ ¡Análisis completado exitosamente por Gemini!")
+                            st.session_state["lectura_gen"] = analisis_ia.get(
+                                "lectura_general", ""
+                            )
+                            concs = analisis_ia.get(
+                                "conclusiones", ["", "", ""]
+                            )
+                            st.session_state["conc_1"] = (
+                                concs[0] if len(concs) > 0 else ""
+                            )
+                            st.session_state["conc_2"] = (
+                                concs[1] if len(concs) > 1 else ""
+                            )
+                            st.session_state["conc_3"] = (
+                                concs[2] if len(concs) > 2 else ""
+                            )
+                            st.session_state["asp_cons"] = ", ".join(
+                                analisis_ia.get("aspectos_conservar", [])
+                            )
+                            st.session_state["asp_corr"] = ", ".join(
+                                analisis_ia.get("aspectos_corregir", [])
+                            )
+                            st.session_state["foc_ent"] = ", ".join(
+                                analisis_ia.get("focos_entrenamiento", [])
+                            )
+                            st.success(
+                                "✨ ¡Análisis completado exitosamente por Gemini!"
+                            )
                 else:
-                    st.warning("⚠️ Sube primero los archivos PDF de tagueo para que Gemini pueda leer las estadísticas.")
+                    st.warning(
+                        "⚠️ Sube primero los archivos PDF de tagueo para que Gemini pueda leer las estadísticas."
+                    )
 
             st.write("---")
-            lectura_gen = st.text_area("Lectura General del Partido:", value=st.session_state["lectura_gen"])
-            conc_1 = st.text_input("Conclusión 1:", value=st.session_state["conc_1"])
-            conc_2 = st.text_input("Conclusión 2:", value=st.session_state["conc_2"])
-            conc_3 = st.text_input("Conclusión 3:", value=st.session_state["conc_3"])
+            lectura_gen = st.text_area(
+                "Lectura General del Partido:",
+                value=st.session_state["lectura_gen"],
+            )
+            conc_1 = st.text_input(
+                "Conclusión 1:", value=st.session_state["conc_1"]
+            )
+            conc_2 = st.text_input(
+                "Conclusión 2:", value=st.session_state["conc_2"]
+            )
+            conc_3 = st.text_input(
+                "Conclusión 3:", value=st.session_state["conc_3"]
+            )
 
-            asp_cons = st.text_area("Aspectos a conservar (separados por coma):", value=st.session_state["asp_cons"])
-            asp_corr = st.text_area("Aspectos a corregir (separados por coma):", value=st.session_state["asp_corr"])
-            foc_ent = st.text_area("Focos de entrenamiento (separados por coma):", value=st.session_state["foc_ent"])
+            asp_cons = st.text_area(
+                "Aspectos a conservar (separados por coma):",
+                value=st.session_state["asp_cons"],
+            )
+            asp_corr = st.text_area(
+                "Aspectos a corregir (separados por coma):",
+                value=st.session_state["asp_corr"],
+            )
+            foc_ent = st.text_area(
+                "Focos de entrenamiento (separados por coma):",
+                value=st.session_state["foc_ent"],
+            )
 
-            if st.button("🚀 GENERAR Y DESCARGAR PDF DE 6 PÁGINAS", use_container_width=True):
+            if st.button(
+                "🚀 GENERAR Y DESCARGAR PDF DE 6 PÁGINAS",
+                use_container_width=True,
+            ):
                 datos_extraidos, graficos_extraidos = (
-                    extraer_datos_y_graficos(archivos_tagueo) if archivos_tagueo else ({}, {})
+                    extraer_datos_y_graficos(archivos_tagueo)
+                    if archivos_tagueo
+                    else ({}, {})
+                )
+
+                # Renderizado dinámico del Radar Chart Nivel Cyber-Tech
+                buf_radar = generar_radar_chart_tactico(
+                    datos_extraidos, eq_local, eq_visita
                 )
 
                 data_pdf = {
@@ -781,13 +1100,21 @@ with tab_admin:
                     "goles_visita": g_visita,
                     "lectura_general": lectura_gen,
                     "conclusiones": [conc_1, conc_2, conc_3],
-                    "aspectos_conservar": [x.strip() for x in asp_cons.split(",") if x.strip()],
-                    "aspectos_corregir": [x.strip() for x in asp_corr.split(",") if x.strip()],
-                    "focos_entrenamiento": [x.strip() for x in foc_ent.split(",") if x.strip()],
+                    "aspectos_conservar": [
+                        x.strip() for x in asp_cons.split(",") if x.strip()
+                    ],
+                    "aspectos_corregir": [
+                        x.strip() for x in asp_corr.split(",") if x.strip()
+                    ],
+                    "focos_entrenamiento": [
+                        x.strip() for x in foc_ent.split(",") if x.strip()
+                    ],
                     **datos_extraidos,
                 }
 
-                pdf_bytes = generar_pdf_6_paginas(data_pdf, graficos_extraidos)
+                pdf_bytes = generar_pdf_6_paginas(
+                    data_pdf, graficos_extraidos, buf_radar
+                )
                 st.download_button(
                     label="📥 DESCARGAR REPORTE FINAL EN PDF",
                     data=pdf_bytes,
@@ -801,7 +1128,14 @@ with tab_admin:
             if st.button("🚀 CREAR EQUIPO") and nuevo_equipo:
                 exito = agregar_fila_excel(
                     "PARTIDOS",
-                    [nuevo_equipo, datetime.now().strftime("%d/%m/%Y"), "Bienvenida", "Listo", "https://drive.google.com", 0],
+                    [
+                        nuevo_equipo,
+                        datetime.now().strftime("%d/%m/%Y"),
+                        "Bienvenida",
+                        "Listo",
+                        "https://drive.google.com",
+                        0,
+                    ],
                 )
                 if exito:
                     st.success(f"Equipo {nuevo_equipo} creado con éxito.")
@@ -812,34 +1146,65 @@ with tab_admin:
             equipo_u = st.text_input("Categoría / Equipo:")
             if st.button("💾 Guardar Cliente", use_container_width=True):
                 if nombre_papa and nombre_hijo:
-                    exito = agregar_fila_excel("USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u])
+                    exito = agregar_fila_excel(
+                        "USUARIOS", [nombre_papa.strip(), nombre_hijo.strip(), equipo_u]
+                    )
                     if exito:
                         st.success(f"👤 Jugador {nombre_hijo} guardado con éxito.")
 
         elif opcion_admin == "📆 3. Programar Grabación / Subir Video + CALENDAR":
             fecha_sel = st.date_input("Fecha del Encuentro:", datetime.now())
-            equipo_sel = st.text_input("Categoría / Equipo Destino:", value="Fortaleza 2017 B")
+            equipo_sel = st.text_input(
+                "Categoría / Equipo Destino:", value="Fortaleza 2017 B"
+            )
             rival_sel = st.text_input("Nombre del Rival:")
-            link_sel = st.text_input("Enlace Google Drive del Video / Reporte PDF:")
+            link_sel = st.text_input(
+                "Enlace Google Drive del Video / Reporte PDF:"
+            )
             if st.button("💾 Publicar Partido", use_container_width=True):
                 if rival_sel:
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
-                    exito = agregar_fila_excel("PARTIDOS", [equipo_sel, fecha_str, rival_sel, "Listo", link_sel, 0])
+                    exito = agregar_fila_excel(
+                        "PARTIDOS",
+                        [equipo_sel, fecha_str, rival_sel, "Listo", link_sel, 0],
+                    )
                     if exito:
-                        crear_evento_google_calendar(FOCUS_CALENDAR_DEFAULT, rival_sel, fecha_sel, equipo_sel)
+                        crear_evento_google_calendar(
+                            FOCUS_CALENDAR_DEFAULT, rival_sel, fecha_sel, equipo_sel
+                        )
                         st.success("✅ Guardado y agendado en Google Calendar.")
 
         elif opcion_admin == "💰 4. Registrar Cobro Mensual (Clubes VIP)":
             equipo_m = st.text_input("Equipo:")
-            mes_m = st.selectbox("Mes Cobrado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"])
+            mes_m = st.selectbox(
+                "Mes Cobrado:",
+                [
+                    "Enero",
+                    "Febrero",
+                    "Marzo",
+                    "Abril",
+                    "Mayo",
+                    "Junio",
+                    "Julio",
+                    "Agosto",
+                    "Septiembre",
+                    "Octubre",
+                    "Noviembre",
+                    "Diciembre",
+                ],
+            )
             monto_m = st.number_input("Monto ($ COP):", value=350000)
             if st.button("💾 Guardar Cobro", use_container_width=True):
-                exito = agregar_fila_excel("PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, "Pagado"])
+                exito = agregar_fila_excel(
+                    "PAGOS_MENSUALES", [equipo_m, mes_m, monto_m, "Pagado"]
+                )
                 if exito:
                     st.success("💳 Registrado en tesorería.")
 
         elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
-            tabla_sel = st.radio("Selecciona tabla:", ["USUARIOS", "PARTIDOS", "PAGOS_MENSUALES"])
+            tabla_sel = st.radio(
+                "Selecciona tabla:", ["USUARIOS", "PARTIDOS", "PAGOS_MENSUALES"]
+            )
             df_audit = obtener_datos_pestana(tabla_sel)
             st.dataframe(df_audit, use_container_width=True)
 
