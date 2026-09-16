@@ -684,12 +684,11 @@ class PDFReporteFocus(FPDF):
     def footer(self):
         if self.page_no() > 1:
             self.set_y(-15)
-            # Pie de página izquierdo: Powered by AccusIA
+            self.set_x(12)
             self.set_font("Helvetica", "B", 8)
             self.set_text_color(255, 85, 0)
             self.cell(80, 10, "Powered by AccusIA", align="L")
 
-            # Pie de página derecho: FOCUS by AccuSport | Página X
             self.set_font("Helvetica", "", 8)
             self.set_text_color(128, 128, 128)
             self.cell(
@@ -723,21 +722,26 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     try:
         pdf.image(PATH_LOGO_FOCUS, x=75, y=30, w=60)
         pdf.set_y(100)
+        pdf.set_x(12)
     except Exception:
         pdf.set_font("Helvetica", "B", 36)
         pdf.set_text_color(*WHITE)
         pdf.set_y(80)
+        pdf.set_x(12)
         pdf.cell(0, 15, "FOCUS", ln=True, align="C")
         pdf.set_font("Helvetica", "B", 14)
         pdf.set_text_color(*ORANGE)
+        pdf.set_x(12)
         pdf.cell(0, 8, "by AccuSport", ln=True, align="C")
 
     pdf.ln(25)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*WHITE)
     pdf.cell(0, 10, "REPORTE DE ANÁLISIS DE PARTIDO", ln=True, align="C")
 
     pdf.ln(8)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 24)
     pdf.set_text_color(*ORANGE)
     pdf.cell(
@@ -748,26 +752,31 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         align="C",
     )
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "", 12)
     pdf.set_text_color(180, 180, 180)
     pdf.cell(0, 8, f"{fec_str}", ln=True, align="C")
 
     pdf.set_y(245)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(150, 150, 150)
     pdf.cell(
         0, 5, "Análisis basado en reportes de tagueo oficial", ln=True, align="C"
     )
+    pdf.set_x(12)
     pdf.cell(
         0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C"
     )
 
     # PÁGINA 2: ANÁLISIS GENERAL
     pdf.add_page()
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
     pdf.cell(0, 10, "Análisis general del partido", ln=True)
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(0, 6, f"{eq_loc} vs {eq_vis} - {fec_str}", ln=True)
@@ -777,6 +786,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.rect(12, pdf.get_y(), 186, 22, "F")
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(*WHITE)
+    pdf.set_x(12)
     pdf.cell(
         0,
         14,
@@ -821,27 +831,33 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     )
     pdf.ln(12)
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(0, 6, "Lectura general:", ln=True)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "", 10)
     pdf.multi_cell(
         0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos."))
     )
     pdf.ln(6)
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Tres conclusiones rápidas:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for conc in data.get("conclusiones", []):
+        pdf.set_x(12)
         pdf.multi_cell(0, 5, f"- {sanitizar_texto(conc)}")
         pdf.ln(1)
 
     # PÁGINA 3: COMPARATIVO Y RADAR REESCALADO
     pdf.add_page()
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
     pdf.cell(0, 10, "Comparativo Táctico & Rendimiento", ln=True)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "I", 10)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(
@@ -853,9 +869,14 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         try:
             pdf.image(buf_radar, x=35, y=45, w=140)
             pdf.set_y(190)
+            pdf.set_x(12)
         except Exception:
+            pdf.set_x(12)
             pdf.cell(
-                0, 10, "[Error al renderizar el Radar Chart Cyber-Tech]", ln=True
+                0,
+                10,
+                "[Error al renderizar el Radar Chart Cyber-Tech]",
+                ln=True,
             )
 
     stats_tabla = [
@@ -886,6 +907,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         ),
     ]
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(*WHITE)
@@ -896,15 +918,18 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*TEXT_DARK)
     for var, v1, v2 in stats_tabla:
+        pdf.set_x(12)
         pdf.cell(86, 6, f" {sanitizar_texto(var)}", 1, 0, "L")
         pdf.cell(50, 6, f" {sanitizar_texto(v1)}", 1, 0, "C")
         pdf.cell(50, 6, f" {sanitizar_texto(v2)}", 1, 1, "C")
 
     # PÁGINA 4: MAPA DE REMATES NATIVO
     pdf.add_page()
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
     pdf.cell(0, 10, "Ataque y definición", ln=True)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(
@@ -916,11 +941,15 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         try:
             pdf.image(buf_shot, x=15, y=45, w=180)
             pdf.set_y(175)
+            pdf.set_x(12)
         except Exception:
+            pdf.set_x(12)
             pdf.cell(0, 10, "[Error al renderizar Shot Chart]", ln=True)
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Análisis de producción ofensiva:", ln=True)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "", 10)
     pdf.multi_cell(
         0,
@@ -932,9 +961,11 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
 
     # PÁGINA 5: PASE Y CIRCULACIÓN NATIVA
     pdf.add_page()
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
     pdf.cell(0, 10, "Posesión y circulación por tercios", ln=True)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(
@@ -946,9 +977,12 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         try:
             pdf.image(buf_pases, x=15, y=45, w=180)
             pdf.set_y(160)
+            pdf.set_x(12)
         except Exception:
+            pdf.set_x(12)
             pdf.cell(0, 10, "[Error al renderizar Pases]", ln=True)
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Glosario Táctico Rápido:", ln=True)
     pdf.set_font("Helvetica", "", 9)
@@ -958,13 +992,16 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         ("Tercio Ofensivo", "Zona de gestación y remate final."),
     ]
     for term, desc in glosario_items:
+        pdf.set_x(12)
         pdf.multi_cell(0, 5, f"- {term}: {desc}")
 
     # PÁGINA 6: CONCLUSIONES Y JUGADORES DESTACADOS
     pdf.add_page()
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(*ORANGE)
     pdf.cell(0, 10, "Conclusiones y jugadores destacados", ln=True)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "I", 10)
     pdf.set_text_color(*TEXT_DARK)
     pdf.cell(0, 6, "Síntesis técnica e hitos individuales", ln=True)
@@ -972,36 +1009,44 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
 
     destacados = data.get("jugadores_destacados", [])
     if destacados:
+        pdf.set_x(12)
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 6, "Jugadores Destacados del Partido:", ln=True)
         pdf.set_font("Helvetica", "", 10)
         for jug in destacados:
             nom = sanitizar_texto(jug.get("nombre", "Jugador"))
             apo = sanitizar_texto(jug.get("aporte", "Gran rendimiento"))
+            pdf.set_x(12)
             pdf.multi_cell(0, 5, f"★ {nom} - {apo}")
             pdf.ln(1)
         pdf.ln(3)
 
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Aspectos a conservar:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_conservar", []):
+        pdf.set_x(12)
         pdf.multi_cell(0, 5, f"[OK] {sanitizar_texto(asp)}")
         pdf.ln(1)
 
     pdf.ln(2)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Aspectos a corregir:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for asp in data.get("aspectos_corregir", []):
+        pdf.set_x(12)
         pdf.multi_cell(0, 5, f"[X] {sanitizar_texto(asp)}")
         pdf.ln(1)
 
     pdf.ln(2)
+    pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Focos sugeridos para entrenamiento:", ln=True)
     pdf.set_font("Helvetica", "", 10)
     for foc in data.get("focos_entrenamiento", []):
+        pdf.set_x(12)
         pdf.multi_cell(0, 5, f"> {sanitizar_texto(foc)}")
         pdf.ln(1)
 
