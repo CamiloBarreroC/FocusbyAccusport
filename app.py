@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import re
+import tempfile
 from datetime import datetime, timedelta
 
 from fpdf import FPDF
@@ -277,13 +278,12 @@ def inicializar_pestanas_jugadores():
 
 
 def procesar_foto_jugador_base64(file_obj):
-    """Optimiza la foto del jugador a 250x250 px y la convierte en un string Base64 ultra ligero."""
+    """Optimiza la foto del jugador a 250x250 px y la convierte en Base64."""
     try:
         img = Image.open(io.BytesIO(file_obj.getvalue()))
         if img.mode != "RGB":
             img = img.convert("RGB")
 
-        # Redimensionar proporcionalmente a tamaño carné
         img.thumbnail((250, 250))
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=75)
@@ -1430,6 +1430,305 @@ def generar_pdf_6_paginas(
 
 
 # =====================================================================
+# 🎴 GENERADOR PDF: FICHA INDIVIDUAL DE PARTIDO (1 PÁGINA)
+# =====================================================================
+def generar_pdf_ficha_partido_jugador(data_jug):
+    pdf = PDFReporteFocus()
+    pdf.add_page()
+    pdf.set_margins(12, 12, 12)
+
+    ORANGE = (255, 85, 0)
+    DARK = (13, 13, 13)
+    WHITE = (255, 255, 255)
+    GRAY_BG = (245, 245, 247)
+    TEXT_DARK = (30, 30, 30)
+
+    # Header / Baner del Jugador
+    pdf.set_fill_color(*DARK)
+    pdf.rect(12, 12, 186, 35, "F")
+
+    # Renderizar Foto Base64 si existe
+    foto_b64 = data_jug.get("Foto_URL", "")
+    if foto_b64 and "base64," in foto_b64:
+        try:
+            raw_b64 = foto_b64.split("base64,")[1]
+            img_data = base64.b64decode(raw_b64)
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=".jpg"
+            ) as tmp_img:
+                tmp_img.write(img_data)
+                tmp_img_path = tmp_img.name
+            pdf.image(tmp_img_path, x=15, y=14, w=30, h=30)
+        except Exception:
+            pdf.rect(15, 14, 30, 30, "D")
+    else:
+        pdf.set_fill_color(30, 30, 30)
+        pdf.rect(15, 14, 30, 30, "F")
+
+    # Nombre y Dorsal
+    pdf.set_xy(50, 16)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(*ORANGE)
+    pdf.cell(
+        0, 8, sanitizar_texto(f"#{data_jug.get('Dorsal', data_jug.get('dorsal', '0'))} {data_jug.get('Jugador', data_jug.get('jugador', 'Jugador'))}"), ln=True
+    )
+
+    pdf.set_x(50)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(*WHITE)
+    pdf.cell(
+        0,
+        5,
+        sanitizar_texto(
+            f"Equipo: {data_jug.get('Equipo', 'N/A')}  |  Rival: {data_jug.get('Rival', 'N/A')}"
+        ),
+        ln=True,
+    )
+
+    pdf.set_x(50)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(180, 180, 180)
+    pdf.cell(
+        0,
+        5,
+        sanitizar_texto(
+            f"Fecha: {data_jug.get('Fecha', 'N/A')}  |  Reporte de Partido Individual"
+        ),
+        ln=True,
+    )
+
+    pdf.ln(18)
+
+    # Tarjetas Métricas Principales (Adaptativo a falta de minutos)
+    pdf.set_fill_color(*GRAY_BG)
+    y_cards = pdf.get_y()
+    w_card = 43
+
+    pdf.rect(12, y_cards, w_card, 18, "F")
+    pdf.rect(59, y_cards, w_card, 18, "F")
+    pdf.rect(106, y_cards, w_card, 18, "F")
+    pdf.rect(153, y_cards, 45, 18, "F")
+
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(*TEXT_DARK)
+
+    pdf.set_y(y_cards + 2)
+    pdf.set_x(12)
+    pdf.cell(w_card, 4, "PARTICIPACIONES", align="C")
+    pdf.set_x(59)
+    pdf.cell(w_card, 4, "MINUTOS JUGADOS", align="C")
+    pdf.set_x(106)
+    pdf.cell(w_card, 4, "REMATES (A PUERTA)", align="C")
+    pdf.set_x(153)
+    pdf.cell(45, 4, "PASES COMPLETADOS", align="C", ln=True)
+
+    mins_val = (
+        f"{data_jug.get('Minutos_Jugados', data_jug.get('minutos', 0))} min"
+        if int(data_jug.get('Minutos_Jugados', data_jug.get('minutos', 0)) or 0) > 0
+        else "--"
+    )
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(*ORANGE)
+    pdf.set_x(12)
+    pdf.cell(
+        w_card, 7, f"{data_jug.get('Participaciones_Totales', data_jug.get('participaciones', 0))}", align="C"
+    )
+    pdf.set_x(59)
+    pdf.cell(w_card, 7, mins_val, align="C")
+    pdf.set_x(106)
+    pdf.cell(
+        w_card,
+        7,
+        f"{data_jug.get('Remates_Totales', data_jug.get('remates_totales', 0))} ({data_jug.get('Remates_A_Puerta', data_jug.get('remates_a_puerta', 0))})",
+        align="C",
+    )
+    pdf.set_x(153)
+    pdf.cell(
+        45,
+        7,
+        f"{data_jug.get('Pases_Completados', data_jug.get('pases_completados', 0))}/{data_jug.get('Pases_Intentados', data_jug.get('pases_intentados', 0))}",
+        align="C",
+        ln=True,
+    )
+
+    pdf.ln(12)
+
+    # Detalle Ofensivo y Defensivo
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(*DARK)
+    pdf.cell(0, 6, "Desglose de Acciones en Juego", ln=True)
+    pdf.ln(2)
+
+    stats_tabla = [
+        ("Goles Concretados", str(data_jug.get("Goles", data_jug.get("goles", 0)))),
+        ("Asistencias de Gol", str(data_jug.get("Asistencias", data_jug.get("asistencias", 0)))),
+        ("Centros al Área", str(data_jug.get("Centros", data_jug.get("centros", 0)))),
+        ("Recuperaciones de Balón", str(data_jug.get("Recuperaciones", data_jug.get("recuperaciones", 0)))),
+        ("Duelos Defensivos Ganados", str(data_jug.get("Duelos_Def_Ganados", data_jug.get("duelos_def_ganados", 0)))),
+    ]
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(*DARK)
+    pdf.set_text_color(*WHITE)
+    pdf.cell(130, 6, " Métrica Evaluada", 1, 0, "L", fill=True)
+    pdf.cell(56, 6, " Total Registrado", 1, 1, "C", fill=True)
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*TEXT_DARK)
+    for var, val in stats_tabla:
+        pdf.cell(130, 6, f" {sanitizar_texto(var)}", 1, 0, "L")
+        pdf.cell(56, 6, f" {sanitizar_texto(val)}", 1, 1, "C")
+
+    return bytes(pdf.output())
+
+
+# =====================================================================
+# 📚 GENERADOR PDF: DOSSIER DE TEMPORADA (HISTÓRICO)
+# =====================================================================
+def generar_pdf_dossier_temporada(data_acum, df_historico):
+    pdf = PDFReporteFocus()
+    pdf.add_page()
+    pdf.set_margins(12, 12, 12)
+
+    ORANGE = (255, 85, 0)
+    DARK = (13, 13, 13)
+    WHITE = (255, 255, 255)
+    GRAY_BG = (245, 245, 247)
+    TEXT_DARK = (30, 30, 30)
+
+    # Cabecera Dossier
+    pdf.set_fill_color(*DARK)
+    pdf.rect(12, 12, 186, 35, "F")
+
+    foto_b64 = data_acum.get("Foto_URL", "")
+    if foto_b64 and "base64," in foto_b64:
+        try:
+            raw_b64 = foto_b64.split("base64,")[1]
+            img_data = base64.b64decode(raw_b64)
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=".jpg"
+            ) as tmp_img:
+                tmp_img.write(img_data)
+                tmp_img_path = tmp_img.name
+            pdf.image(tmp_img_path, x=15, y=14, w=30, h=30)
+        except Exception:
+            pdf.rect(15, 14, 30, 30, "D")
+
+    pdf.set_xy(50, 16)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(*ORANGE)
+    pdf.cell(
+        0,
+        8,
+        sanitizar_texto(
+            f"DOSSIER: #{data_acum.get('Dorsal', '0')} {data_acum.get('Jugador', 'Jugador')}"
+        ),
+        ln=True,
+    )
+
+    pdf.set_x(50)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(*WHITE)
+    pdf.cell(
+        0,
+        5,
+        sanitizar_texto(f"Equipo: {data_acum.get('Equipo', 'N/A')}"),
+        ln=True,
+    )
+
+    pdf.set_x(50)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(180, 180, 180)
+    pdf.cell(0, 5, "Consolidado Acumulado de Temporada", ln=True)
+
+    pdf.ln(18)
+
+    # Acumulados Generales
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(*DARK)
+    pdf.cell(0, 6, "Totales Acumulados", ln=True)
+    pdf.ln(2)
+
+    stats_acum = [
+        ("Partidos Jugados (MP)", str(data_acum.get("Partidos_Jugados", 0))),
+        ("Minutos Acumulados", str(data_acum.get("Minutos_Totales", 0))),
+        ("Goles Totales", str(data_acum.get("Goles_Totales", 0))),
+        ("Asistencias Totales", str(data_acum.get("Asistencias_Totales", 0))),
+        (
+            "Efectividad de Remate (%)",
+            str(data_acum.get("Efectividad_Remate_%", "0%")),
+        ),
+        ("Precision de Pase (%)", str(data_acum.get("Precision_Pase_%", "0%"))),
+    ]
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(*DARK)
+    pdf.set_text_color(*WHITE)
+    pdf.cell(130, 6, " Métrica de Carrera / Temporada", 1, 0, "L", fill=True)
+    pdf.cell(56, 6, " Acumulado", 1, 1, "C", fill=True)
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*TEXT_DARK)
+    for var, val in stats_acum:
+        pdf.cell(130, 6, f" {sanitizar_texto(var)}", 1, 0, "L")
+        pdf.cell(56, 6, f" {sanitizar_texto(val)}", 1, 1, "C")
+
+    pdf.ln(8)
+
+    # Historial Partido a Partido
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(*DARK)
+    pdf.cell(0, 6, "Historial de Encuentros Disputados", ln=True)
+    pdf.ln(2)
+
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(*DARK)
+    pdf.set_text_color(*WHITE)
+    pdf.cell(25, 6, "Fecha", 1, 0, "C", fill=True)
+    pdf.cell(45, 6, "Rival", 1, 0, "L", fill=True)
+    pdf.cell(30, 6, "Part. Totales", 1, 0, "C", fill=True)
+    pdf.cell(25, 6, "Goles", 1, 0, "C", fill=True)
+    pdf.cell(30, 6, "Remates (P)", 1, 0, "C", fill=True)
+    pdf.cell(31, 6, "Pases (C)", 1, 1, "C", fill=True)
+
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*TEXT_DARK)
+
+    if not df_historico.empty:
+        for idx, row in df_historico.iterrows():
+            pdf.cell(25, 5, sanitizar_texto(str(row.get("Fecha", ""))), 1, 0, "C")
+            pdf.cell(45, 5, sanitizar_texto(str(row.get("Rival", ""))), 1, 0, "L")
+            pdf.cell(
+                30,
+                5,
+                sanitizar_texto(str(row.get("Participaciones_Totales", 0))),
+                1,
+                0,
+                "C",
+            )
+            pdf.cell(25, 5, sanitizar_texto(str(row.get("Goles", 0))), 1, 0, "C")
+            pdf.cell(
+                30,
+                5,
+                f"{row.get('Remates_Totales',0)} ({row.get('Remates_A_Puerta',0)})",
+                1,
+                0,
+                "C",
+            )
+            pdf.cell(
+                31,
+                5,
+                f"{row.get('Pases_Completados',0)}/{row.get('Pases_Intentados',0)}",
+                1,
+                1,
+                "C",
+            )
+
+    return bytes(pdf.output())
+
+
+# =====================================================================
 # 📐 CABECERA PRINCIPAL
 # =====================================================================
 _, col_logo_center, _ = st.columns([1, 4, 1])
@@ -1552,6 +1851,7 @@ with tab_admin:
             [
                 "📄 Generar Reporte Colectivo PDF (Tagueo CSV / PDF)",
                 "👤 Ingestar Tagueo Individual de Jugador (PDF)",
+                "📑 Exportar PDF Individual de Jugador",
                 "📸 Cargar Foto de Jugador (Perfil / Scouting)",
                 "🛠️ Inicializar Base de Datos de Jugadores",
                 "📈 Tablero de Control Financiero (Balance)",
@@ -1747,6 +2047,51 @@ with tab_admin:
                                 st.json(json_data)
                 else:
                     st.warning("⚠️ Sube al menos un reporte PDF del jugador.")
+
+        elif opcion_admin == "📑 Exportar PDF Individual de Jugador":
+            st.write("#### 📄 Exportador de Reportes por Jugador")
+
+            df_acum = obtener_datos_pestana("ACUMULADO_TEMPORADA")
+            if not df_acum.empty and "Jugador" in df_acum.columns:
+                lista_jug = df_acum["Jugador"].unique().tolist()
+                jug_sel = st.selectbox("Selecciona un Jugador:", lista_jug)
+
+                tipo_rep = st.radio(
+                    "Tipo de Reporte a Generar:",
+                    ["Ficha del Último Partido", "Dossier Consolidado de Temporada"],
+                )
+
+                if st.button("🚀 GENERAR REPORTE EN PDF", use_container_width=True):
+                    df_hist = obtener_datos_pestana("HISTORICO_PARTIDOS")
+                    row_acum = df_acum[df_acum["Jugador"] == jug_sel].iloc[0].to_dict()
+                    df_jug_hist = df_hist[df_hist["Jugador"] == jug_sel]
+
+                    if tipo_rep == "Ficha del Último Partido":
+                        if not df_jug_hist.empty:
+                            last_match = df_jug_hist.iloc[-1].to_dict()
+                            pdf_bytes = generar_pdf_ficha_partido_jugador(last_match)
+                            st.download_button(
+                                label="📥 DESCARGAR FICHA DE PARTIDO PDF",
+                                data=pdf_bytes,
+                                file_name=f"Partido_{jug_sel.replace(' ', '_')}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True,
+                            )
+                        else:
+                            st.warning("No hay partidos registrados para este jugador.")
+                    else:
+                        pdf_bytes = generar_pdf_dossier_temporada(
+                            row_acum, df_jug_hist
+                        )
+                        st.download_button(
+                            label="📥 DESCARGAR DOSSIER ACUMULADO PDF",
+                            data=pdf_bytes,
+                            file_name=f"Dossier_{jug_sel.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                        )
+            else:
+                st.info("ℹ️ Aún no hay jugadores registrados en la pestaña `ACUMULADO_TEMPORADA`.")
 
         elif opcion_admin == "📸 Cargar Foto de Jugador (Perfil / Scouting)":
             st.write("#### 📸 Cargar Fotografía Oficial de Perfil")
