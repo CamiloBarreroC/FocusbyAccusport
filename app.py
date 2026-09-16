@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from PIL import Image
-import Streamlit as st
+import streamlit as st
 
 try:
     import pdfplumber
