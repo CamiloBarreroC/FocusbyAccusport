@@ -757,7 +757,7 @@ def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
 
 
 # =====================================================================
-# 🤖 MOTOR ACCUS-IA PARA PARTIDOS Y JUGADORES
+# 🤖 MOTOR ACCUS-IA VISUAL MULTIMODAL
 # =====================================================================
 def generar_analisis_tactico_gemini(
     texto_partido, equipo_local, equipo_visita
@@ -809,7 +809,7 @@ def generar_analisis_tactico_gemini(
         }}
         """
 
-        response = client.models.generateContent(
+        response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -828,7 +828,8 @@ def generar_analisis_tactico_gemini(
         return None
 
 
-def extraer_datos_jugador_gemini(texto_pdf):
+def extraer_datos_jugador_gemini(files_jugador):
+    """Procesa e inspecciona los PDFs adjuntos NATIVAMENTE a nivel visual."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
             st.error("⚠️ No se encontró GEMINI_API_KEY.")
@@ -837,20 +838,30 @@ def extraer_datos_jugador_gemini(texto_pdf):
         api_key = st.secrets["GEMINI_API_KEY"]
         client = genai.Client(api_key=api_key)
 
-        prompt = f"""
+        contents = []
+        for file_obj in files_jugador:
+            file_bytes = file_obj.getvalue()
+            contents.append(
+                types.Part.from_bytes(
+                    data=file_bytes,
+                    mime_type="application/pdf",
+                )
+            )
+
+        prompt = """
         Actúa como especialista en analítica de datos deportivos de AccuSport Colombia.
-        Analiza el siguiente texto de uno o varios reportes de tagueo individual de jugador (PDFs de Hudl/Focus).
+        Analiza VISUALMENTE las páginas de los reportes PDF adjuntos (reportes de tagueo de Hudl/Focus).
 
-        TEXTO EXTRAÍDO DEL TAGUEO INDIVIDUAL:
-        {texto_pdf}
+        Lee con máxima precisión cada tabla, infografía e icono presente en los documentos.
 
-        REGLAS CRÍTICAS DE SUMATORIA, MINUTOS Y EXTRACCIÓN DE PASES:
-        1. Si el texto proviene de varios archivos/tiempos, SUMA todos los valores numéricos de cada acción.
-        2. PRESTA EXTREMA ATENCIÓN A LOS PASES: Busca métricas como "Pases Exitosos", "Pases Completados", "Pases Intentados", "Pases Cortos", "Pases Largos" o "Pases Totales".
-        3. MINUTOS JUGADOS: NO sumes marcas de tiempo de video (timestamps de clips como 01:05, 105s, etc.). Si no figura la duración total jugada explícita, coloca 0 (el usuario podrá ingresarla manualmente).
+        REGLAS CRÍTICAS DE LECTURA VISUAL Y SUMATORIA:
+        1. SUMA los valores numéricos de todas las páginas y archivos proporcionados.
+        2. PASES COMPLETADOS Y INTENTADOS: Busca visualmente las filas o cajas etiquetadas como "Passes", "Pases", "Pases Exitosos", "Pases Intentados" o relaciones "X/Y". No omitas esta fila ni la confundas con ceros.
+        3. CENTROS Y ASISTENCIAS: Lee las cajas de "Crosses", "Centros", "Assists" o "Asistencias".
+        4. MINUTOS JUGADOS: Coloca 0 (se sobreescribirá con la entrada manual del usuario).
 
         Responde en formato JSON estricto con la siguiente estructura:
-        {{
+        {
             "jugador": "Matias Barrero",
             "dorsal": "13",
             "minutos": 0,
@@ -864,12 +875,13 @@ def extraer_datos_jugador_gemini(texto_pdf):
             "pases_completados": 18,
             "recuperaciones": 3,
             "duelos_def_ganados": 2
-        }}
+        }
         """
+        contents.append(prompt)
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=prompt,
+            contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.1,
@@ -942,7 +954,9 @@ def generar_scouting_cualitativo_jugador(data_jugador):
         }
 
 
-def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival, mins_override=None):
+def procesar_e_ingresar_jugador_db(
+    data_jugador, fecha, equipo, rival, mins_override=None
+):
     client = obtener_cliente_sheets()
     if not client:
         return False
@@ -956,7 +970,11 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival, mins_over
         nom = data_jugador.get("jugador", "Desconocido").strip()
         dor = str(data_jugador.get("dorsal", "0")).strip()
 
-        mins = int(mins_override) if mins_override is not None else int(data_jugador.get("minutos", 0))
+        mins = (
+            int(mins_override)
+            if mins_override is not None
+            else int(data_jugador.get("minutos", 0))
+        )
         part = int(data_jugador.get("participaciones", 0))
         gol = int(data_jugador.get("goles", 0))
         asis = int(data_jugador.get("asistencias", 0))
@@ -973,9 +991,14 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival, mins_over
             ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
             records_acum = ws_acum.get_all_records()
             for r in records_acum:
-                match_nom = str(r.get("Jugador", "")).strip().lower() == nom.lower()
+                match_nom = (
+                    str(r.get("Jugador", "")).strip().lower() == nom.lower()
+                )
                 match_dor = str(r.get("Dorsal", "")).strip() == dor
-                match_eq = str(r.get("Equipo", "")).strip().lower() == equipo.strip().lower()
+                match_eq = (
+                    str(r.get("Equipo", "")).strip().lower()
+                    == equipo.strip().lower()
+                )
 
                 if (match_nom or (match_dor and match_eq)) and r.get("Foto_URL"):
                     foto_url = r.get("Foto_URL", "")
@@ -1010,25 +1033,53 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival, mins_over
 
         if not df_hist.empty and "Jugador" in df_hist.columns:
             df_hist["Jugador"] = df_hist["Jugador"].astype(str).str.strip()
-            df_jug = df_hist[df_hist["Jugador"].str.lower() == nom.lower()].copy()
+            df_jug = df_hist[
+                df_hist["Jugador"].str.lower() == nom.lower()
+            ].copy()
 
             if df_jug.empty and "Dorsal" in df_hist.columns:
                 df_jug = df_hist[
                     (df_hist["Dorsal"].astype(str).str.strip() == dor)
-                    & (df_hist["Equipo"].astype(str).str.strip().str.lower() == equipo.strip().lower())
+                    & (
+                        df_hist["Equipo"]
+                        .astype(str)
+                        .str.strip()
+                        .str.lower()
+                        == equipo.strip().lower()
+                    )
                 ].copy()
 
             pj = len(df_jug)
-            m_tot = int(pd.to_numeric(df_jug["Minutos_Jugados"], errors="coerce").sum())
+            m_tot = int(
+                pd.to_numeric(
+                    df_jug["Minutos_Jugados"], errors="coerce"
+                ).sum()
+            )
             g_tot = int(pd.to_numeric(df_jug["Goles"], errors="coerce").sum())
-            a_tot = int(pd.to_numeric(df_jug["Asistencias"], errors="coerce").sum())
-            rt_tot = int(pd.to_numeric(df_jug["Remates_Totales"], errors="coerce").sum())
-            rp_tot = int(pd.to_numeric(df_jug["Remates_A_Puerta"], errors="coerce").sum())
+            a_tot = int(
+                pd.to_numeric(df_jug["Asistencias"], errors="coerce").sum()
+            )
+            rt_tot = int(
+                pd.to_numeric(df_jug["Remates_Totales"], errors="coerce").sum()
+            )
+            rp_tot = int(
+                pd.to_numeric(df_jug["Remates_A_Puerta"], errors="coerce").sum()
+            )
             efec_r = f"{round((rp_tot / max(1, rt_tot)) * 100, 1)}%"
-            pc_tot = int(pd.to_numeric(df_jug["Pases_Completados"], errors="coerce").sum())
-            pi_tot = int(pd.to_numeric(df_jug["Pases_Intentados"], errors="coerce").sum())
+            pc_tot = int(
+                pd.to_numeric(
+                    df_jug["Pases_Completados"], errors="coerce"
+                ).sum()
+            )
+            pi_tot = int(
+                pd.to_numeric(
+                    df_jug["Pases_Intentados"], errors="coerce"
+                ).sum()
+            )
             prec_p = f"{round((pc_tot / max(1, pi_tot)) * 100, 1)}%"
-            rec_tot = int(pd.to_numeric(df_jug["Recuperaciones"], errors="coerce").sum())
+            rec_tot = int(
+                pd.to_numeric(df_jug["Recuperaciones"], errors="coerce").sum()
+            )
 
             cell_found = None
             try:
@@ -1038,7 +1089,9 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival, mins_over
                     r_dor = str(r.get("Dorsal", "")).strip()
                     r_eq = str(r.get("Equipo", "")).strip().lower()
 
-                    if r_nom == nom.lower() or (r_dor == dor and r_eq == equipo.strip().lower()):
+                    if r_nom == nom.lower() or (
+                        r_dor == dor and r_eq == equipo.strip().lower()
+                    ):
                         cell_found = idx
                         break
             except Exception:
@@ -1559,7 +1612,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
     pdf.set_fill_color(*DARK)
     pdf.rect(12, 12, 186, 35, "F")
 
-    # Búsqueda Heredada de Foto
     foto_b64 = data_jug.get("Foto_URL", "")
     nom_jug = data_jug.get("Jugador", data_jug.get("jugador", "Jugador")).strip()
     dor_jug = data_jug.get("Dorsal", data_jug.get("dorsal", "0")).strip()
@@ -1682,7 +1734,7 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
 
     pdf.ln(10)
 
-    # Tabla Desglose de Acciones (SE RENDERIZA PRIMERO SIN SOBREPOSICIÓN)
+    # Tabla Desglose de Acciones
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*DARK)
@@ -2248,7 +2300,7 @@ with tab_admin:
         elif opcion_admin == "👤 Ingestar Tagueo Individual de Jugador (PDF)":
             st.write("#### 📥 Ingesta Automática de Tagueo Individual")
             st.write(
-                "Sube los archivos PDF del tagueo de un jugador (puedes seleccionar varios a la vez, ej. `Barrero.pdf` y `Barrero 2.pdf`). AccusIA extraerá sus métricas y actualizará automáticamente la base de datos en Google Sheets."
+                "Sube los archivos PDF del tagueo de un jugador (puedes seleccionar varios a la vez, ej. `Barrero.pdf` y `Barrero 2.pdf`). AccusIA inspeccionará visualmente las páginas y actualizará la base de datos."
             )
 
             files_jugador = st.file_uploader(
@@ -2269,9 +2321,8 @@ with tab_admin:
 
             if st.button("🚀 INGESTAR METRICAS A GOOGLE SHEETS", use_container_width=True):
                 if files_jugador:
-                    with st.spinner("AccusIA está procesando las métricas del jugador..."):
-                        txt_jugador, _ = extraer_datos_y_graficos(files_jugador)
-                        json_data = extraer_datos_jugador_gemini(txt_jugador)
+                    with st.spinner("AccusIA está analizando visualmente las páginas del reporte..."):
+                        json_data = extraer_datos_jugador_gemini(files_jugador)
 
                         if json_data:
                             exito = procesar_e_ingresar_jugador_db(
