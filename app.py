@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 import gspread
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -141,6 +142,11 @@ def obtener_servicio_calendar():
     return build("calendar", "v3", credentials=creds) if creds else None
 
 
+def obtener_servicio_drive():
+    creds = conectar_google_services()
+    return build("drive", "v3", credentials=creds) if creds else None
+
+
 def obtener_datos_pestana(nombre_pestana):
     client = obtener_cliente_sheets()
     if client:
@@ -233,6 +239,7 @@ def inicializar_pestanas_jugadores():
             "Pases_Completados",
             "Recuperaciones",
             "Duelos_Def_Ganados",
+            "Foto_URL",
         ]
         try:
             ws_hist = sheet.worksheet("HISTORICO_PARTIDOS")
@@ -257,6 +264,7 @@ def inicializar_pestanas_jugadores():
             "Pases_Completados",
             "Precision_Pase_%",
             "Recuperaciones_Totales",
+            "Foto_URL",
         ]
         try:
             ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
@@ -273,15 +281,48 @@ def inicializar_pestanas_jugadores():
         st.error(f"❌ Error al inicializar pestañas: {e}")
 
 
+def subir_foto_jugador_drive(file_obj, nombre_jugador, equipo):
+    drive_service = obtener_servicio_drive()
+    if not drive_service:
+        st.error("❌ No se pudo conectar con Google Drive.")
+        return None
+
+    try:
+        file_metadata = {
+            "name": f"FOTO_{nombre_jugador.replace(' ', '_')}_{equipo}.jpg",
+            "mimeType": "image/jpeg",
+        }
+        media = MediaIoBaseUpload(
+            io.BytesIO(file_obj.getvalue()),
+            mimetype="image/jpeg",
+            resumable=True,
+        )
+
+        archivo_subido = (
+            drive_service.files()
+            .create(body=file_metadata, media_body=media, fields="id, webViewLink")
+            .execute()
+        )
+
+        file_id = archivo_subido.get("id")
+        drive_service.permissions().create(
+            fileId=file_id, body={"type": "anyone", "role": "reader"}
+        ).execute()
+
+        foto_url = f"https://drive.google.com/uc?id={file_id}"
+        return foto_url
+    except Exception as e:
+        st.error(f"❌ Error al subir imagen a Google Drive: {e}")
+        return None
+
+
 # =====================================================================
 # 📊 GENERADORES NATIVOS DE GRÁFICOS TÁCTICOS
 # =====================================================================
 def generar_grafico_resumen_pagina2(datos, equipo_local, equipo_visita):
-    """Genera un gráfico dual (Rosca de Posesión + Efectividad de Remates) para llenar la Página 2."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.2))
     fig.patch.set_facecolor("#0D0D0D")
 
-    # 1. Gráfico de Rosca de Posesión
     ax1.set_facecolor("#0D0D0D")
     try:
         pos_l = float(
@@ -321,7 +362,6 @@ def generar_grafico_resumen_pagina2(datos, equipo_local, equipo_visita):
         "POSESIÓN DE BALÓN (%)", color="white", fontsize=9.5, weight="bold", pad=8
     )
 
-    # 2. Gráfico de Barras de Remates vs Goles
     ax2.set_facecolor("#0D0D0D")
     try:
         g_l = int(datos.get("goles_local", 4))
@@ -465,7 +505,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     ax.spines["polar"].set_linewidth(1.5)
     ax.grid(color="#222222", linestyle="--", linewidth=0.8)
 
-    # Fortaleza (Naranja)
     ax.plot(
         angulos,
         val_loc,
@@ -476,7 +515,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_loc, color="#FF5500", alpha=0.35)
 
-    # Aurinegro (Cian Neón para diferenciación clara)
     ax.plot(
         angulos,
         val_vis,
@@ -487,7 +525,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_vis, color="#00E5FF", alpha=0.15)
 
-    # Etiquetas de Fortaleza
     labels_loc = [
         f"{g_loc:.0f} Goles",
         f"{pos_l:.1f}%",
@@ -536,9 +573,8 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
 
 
 def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
-    """Genera el mapa de remates exclusivo de Fortaleza sobre una cancha verde césped táctica."""
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
-    fig.patch.set_facecolor("#1b4332")  # Verde césped táctico profesional
+    fig.patch.set_facecolor("#1b4332")
     ax.set_facecolor("#1b4332")
 
     line_col = "#ffffff"
@@ -552,7 +588,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
     rem_l = int(datos.get("remates_local", 20))
     gol_l = int(datos.get("goles_local", 4))
 
-    # Goles (Naranja brillante con borde blanco)
     x_gol_l = np.random.uniform(43, 57, gol_l)
     y_gol_l = np.random.uniform(91, 98, gol_l)
     ax.scatter(
@@ -566,7 +601,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
         label=f"Goles ({gol_l})",
     )
 
-    # Remates Fuera / Salvados (Amarillo/Verde neón alto contraste)
     x_rem_l = np.random.uniform(22, 78, max(0, rem_l - gol_l))
     y_rem_l = np.random.uniform(65, 96, max(0, rem_l - gol_l))
     ax.scatter(
@@ -614,7 +648,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
 
 
 def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
-    """Genera un gráfico horizontal despejado para evitar colisiones de texto."""
     fig, ax = plt.subplots(figsize=(8, 3.2))
     fig.patch.set_facecolor("#0D0D0D")
     ax.set_facecolor("#0D0D0D")
@@ -695,7 +728,7 @@ def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
 
 
 # =====================================================================
-# 🤖 MOTOR ACCUS-IA
+# 🤖 MOTOR ACCUS-IA PARA PARTIDOS Y JUGADORES
 # =====================================================================
 def generar_analisis_tactico_gemini(
     texto_partido, equipo_local, equipo_visita
@@ -764,6 +797,174 @@ def generar_analisis_tactico_gemini(
     except Exception as e:
         st.error(f"❌ Error al consultar a AccusIA: {e}")
         return None
+
+
+def extraer_datos_jugador_gemini(texto_pdf):
+    try:
+        if "GEMINI_API_KEY" not in st.secrets:
+            st.error("⚠️ No se encontró GEMINI_API_KEY.")
+            return None
+
+        api_key = st.secrets["GEMINI_API_KEY"]
+        client = genai.Client(api_key=api_key)
+
+        prompt = f"""
+        Actúa como especialista en analítica de datos deportivos de AccuSport Colombia.
+        Extrae la información individual del siguiente texto extraído de un reporte de tagueo de jugador (PDF de Hudl/Focus):
+
+        TEXTO EXTRAÍDO DEL TAGUEO INDIVIDUAL:
+        {texto_pdf}
+
+        Instrucciones:
+        Extrae los valores exactos encontrados en el reporte. Si alguna variable no aparece, pon 0 o 'N/A'.
+
+        Responde en formato JSON estricto con la siguiente estructura:
+        {{
+            "jugador": "Matias Barrero",
+            "dorsal": "13",
+            "minutos": 90,
+            "participaciones": 51,
+            "goles": 0,
+            "asistencias": 1,
+            "remates_totales": 12,
+            "remates_a_puerta": 5,
+            "centros": 2,
+            "pases_intentados": 10,
+            "pases_completados": 8,
+            "recuperaciones": 0,
+            "duelos_def_ganados": 0
+        }}
+        """
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1,
+            ),
+        )
+        return json.loads(response.text)
+    except Exception as e:
+        st.error(f"❌ Error al procesar reporte del jugador con AccusIA: {e}")
+        return None
+
+
+def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
+    client = obtener_cliente_sheets()
+    if not client:
+        return False
+
+    try:
+        sheet = client.open_by_key(CONFIG_SHEET_ID)
+
+        # 1. Guardar en HISTORICO_PARTIDOS
+        ws_hist = sheet.worksheet("HISTORICO_PARTIDOS")
+        id_partido = f"MATCH_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        nom = data_jugador.get("jugador", "Desconocido")
+        dor = str(data_jugador.get("dorsal", "0"))
+        mins = int(data_jugador.get("minutos", 90))
+        part = int(data_jugador.get("participaciones", 0))
+        gol = int(data_jugador.get("goles", 0))
+        asis = int(data_jugador.get("asistencias", 0))
+        rem_t = int(data_jugador.get("remates_totales", 0))
+        rem_p = int(data_jugador.get("remates_a_puerta", 0))
+        cent = int(data_jugador.get("centros", 0))
+        pas_i = int(data_jugador.get("pases_intentados", 0))
+        pas_c = int(data_jugador.get("pases_completados", 0))
+        rec = int(data_jugador.get("recuperaciones", 0))
+        duel = int(data_jugador.get("duelos_def_ganados", 0))
+
+        # Buscar si el jugador ya tiene Foto_URL guardada
+        foto_url = ""
+        try:
+            ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
+            records_acum = ws_acum.get_all_records()
+            for r in records_acum:
+                if str(r.get("Jugador", "")).strip().lower() == nom.strip().lower():
+                    foto_url = r.get("Foto_URL", "")
+                    break
+        except Exception:
+            pass
+
+        fila_hist = [
+            id_partido,
+            fecha,
+            equipo,
+            rival,
+            nom,
+            dor,
+            mins,
+            part,
+            gol,
+            asis,
+            rem_t,
+            rem_p,
+            cent,
+            pas_i,
+            pas_c,
+            rec,
+            duel,
+            foto_url,
+        ]
+        ws_hist.append_row(fila_hist)
+
+        # 2. Recalcular / Upsert en ACUMULADO_TEMPORADA
+        ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
+        df_hist = pd.DataFrame(ws_hist.get_all_records())
+
+        if not df_hist.empty and "Jugador" in df_hist.columns:
+            df_hist["Jugador"] = df_hist["Jugador"].astype(str).str.strip()
+            df_jug = df_hist[df_hist["Jugador"] == nom.strip()].copy()
+
+            pj = len(df_jug)
+            m_tot = int(pd.to_numeric(df_jug["Minutos_Jugados"], errors="coerce").sum())
+            g_tot = int(pd.to_numeric(df_jug["Goles"], errors="coerce").sum())
+            a_tot = int(pd.to_numeric(df_jug["Asistencias"], errors="coerce").sum())
+            rt_tot = int(pd.to_numeric(df_jug["Remates_Totales"], errors="coerce").sum())
+            rp_tot = int(pd.to_numeric(df_jug["Remates_A_Puerta"], errors="coerce").sum())
+            efec_r = f"{round((rp_tot / max(1, rt_tot)) * 100, 1)}%"
+            pc_tot = int(pd.to_numeric(df_jug["Pases_Completados"], errors="coerce").sum())
+            pi_tot = int(pd.to_numeric(df_jug["Pases_Intentados"], errors="coerce").sum())
+            prec_p = f"{round((pc_tot / max(1, pi_tot)) * 100, 1)}%"
+            rec_tot = int(pd.to_numeric(df_jug["Recuperaciones"], errors="coerce").sum())
+
+            # Verificar si existe en la tabla de acumulados
+            cell_found = None
+            try:
+                cell_found = ws_acum.find(nom)
+            except Exception:
+                cell_found = None
+
+            fila_acum = [
+                nom,
+                equipo,
+                dor,
+                pj,
+                m_tot,
+                g_tot,
+                a_tot,
+                rt_tot,
+                rp_tot,
+                efec_r,
+                pc_tot,
+                prec_p,
+                rec_tot,
+                foto_url,
+            ]
+
+            if cell_found:
+                # Actualizar fila existente
+                ws_acum.update(f"A{cell_found.row}:N{cell_found.row}", [fila_acum])
+            else:
+                # Crear nueva fila
+                ws_acum.append_row(fila_acum)
+
+        return True
+    except Exception as e:
+        st.error(f"❌ Error al actualizar Google Sheets: {e}")
+        return False
 
 
 # =====================================================================
@@ -1029,7 +1230,6 @@ def generar_pdf_6_paginas(
         pdf.multi_cell(0, 4.5, sanitizar_texto(f"- {conc}"))
         pdf.ln(1)
 
-    # INSERCIÓN DEL GRÁFICO DUAL RESUMEN EN PÁGINA 2 PARA ELIMINAR EL ESPACIO EN BLANCO
     if buf_p2_resumen:
         try:
             pdf.ln(2)
@@ -1361,7 +1561,9 @@ with tab_admin:
         opcion_admin = st.selectbox(
             "⚙️ ¿Qué acción deseas realizar hoy?",
             [
-                "📄 Generar Reporte de Análisis PDF (Tagueo CSV / PDF)",
+                "📄 Generar Reporte Colectivo PDF (Tagueo CSV / PDF)",
+                "👤 Ingestar Tagueo Individual de Jugador (PDF)",
+                "📸 Cargar Foto de Jugador (Perfil / Scouting)",
                 "🛠️ Inicializar Base de Datos de Jugadores",
                 "📈 Tablero de Control Financiero (Balance)",
                 "🛡️ 1. Añadir Equipo (GLOBAL)",
@@ -1373,8 +1575,8 @@ with tab_admin:
         )
         st.write("---")
 
-        if opcion_admin == "📄 Generar Reporte de Análisis PDF (Tagueo CSV / PDF)":
-            st.write("#### 📊 Generador de Reportes de 6 Páginas Focus")
+        if opcion_admin == "📄 Generar Reporte Colectivo PDF (Tagueo CSV / PDF)":
+            st.write("#### 📊 Generador de Reportes Colectivos Focus")
 
             archivos_tagueo = st.file_uploader(
                 "Sube los archivos PDF de Tagueo (Aurinegro 1, 2, 3, 4):",
@@ -1519,6 +1721,85 @@ with tab_admin:
                     use_container_width=True,
                 )
 
+        elif opcion_admin == "👤 Ingestar Tagueo Individual de Jugador (PDF)":
+            st.write("#### 📥 Ingesta Automática de Tagueo Individual")
+            st.write(
+                "Sube el archivo PDF del tagueo de un jugador (ej. `Barrero 2.pdf`). AccusIA extraerá sus métricas y actualizará automáticamente la base de datos de Google Sheets."
+            )
+
+            file_jugador = st.file_uploader(
+                "Selecciona el reporte PDF del jugador:", type=["pdf"]
+            )
+
+            col_j1, col_j2, col_j3 = st.columns(3)
+            with col_j1:
+                eq_j = st.text_input("Equipo / Categoría:", value="Fortaleza 2017 B")
+            with col_j2:
+                riv_j = st.text_input("Rival del Encuentro:", value="Aurinegro")
+            with col_j3:
+                fec_j = st.text_input("Fecha:", value="12/09/2026")
+
+            if st.button("🚀 INGESTAR METRICAS A GOOGLE SHEETS", use_container_width=True):
+                if file_jugador:
+                    with st.spinner("AccusIA está procesando las métricas del jugador..."):
+                        txt_jugador, _ = extraer_datos_y_graficos([file_jugador])
+                        json_data = extraer_datos_jugador_gemini(txt_jugador)
+
+                        if json_data:
+                            exito = procesar_e_ingresar_jugador_db(
+                                json_data, fec_j, eq_j, riv_j
+                            )
+                            if exito:
+                                st.success(
+                                    f"✨ ¡Datos de **{json_data.get('jugador', 'Jugador')}** ingresados e integrados correctamente en Google Sheets!"
+                                )
+                                st.json(json_data)
+                else:
+                    st.warning("⚠️ Sube primero el reporte PDF del jugador.")
+
+        elif opcion_admin == "📸 Cargar Foto de Jugador (Perfil / Scouting)":
+            st.write("#### 📸 Cargar Fotografía Oficial de Perfil")
+            st.write(
+                "Sube la foto del jugador para vincularla a su ficha técnica y dossiers en PDF."
+            )
+
+            foto_file = st.file_uploader(
+                "Selecciona imagen del jugador (JPG / PNG):", type=["jpg", "jpeg", "png"]
+            )
+
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                nom_foto = st.text_input("Nombre Completo del Jugador:")
+            with col_f2:
+                eq_foto = st.text_input("Equipo / Categoría:", value="Fortaleza 2017 B")
+
+            if st.button("💾 GUARDAR FOTO EN DRIVE Y GOOGLE SHEETS", use_container_width=True):
+                if foto_file and nom_foto:
+                    with st.spinner("Subiendo foto a Google Drive..."):
+                        url_foto = subir_foto_jugador_drive(
+                            foto_file, nom_foto.strip(), eq_foto.strip()
+                        )
+                        if url_foto:
+                            client = obtener_cliente_sheets()
+                            if client:
+                                sheet = client.open_by_key(CONFIG_SHEET_ID)
+                                ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
+                                try:
+                                    cell_f = ws_acum.find(nom_foto.strip())
+                                    if cell_f:
+                                        ws_acum.update_cell(cell_f.row, 14, url_foto)
+                                        st.success(
+                                            f"📸 Foto de **{nom_foto}** guardada y vinculada exitosamente."
+                                        )
+                                    else:
+                                        st.info(
+                                            f"Foto subida a Drive. La URL se vinculará automáticamente cuando se ingeste el primer partido de **{nom_foto}**."
+                                        )
+                                except Exception as e:
+                                    st.error(f"Error al actualizar celda: {e}")
+                else:
+                    st.warning("⚠️ Completa el nombre del jugador y selecciona una foto.")
+
         elif opcion_admin == "🛠️ Inicializar Base de Datos de Jugadores":
             st.write("#### 🛠️ Configuración de Estructura Individual")
             st.write(
@@ -1609,7 +1890,14 @@ with tab_admin:
 
         elif opcion_admin == "👁️ Auditar Hojas de Excel en Vivo":
             tabla_sel = st.radio(
-                "Selecciona tabla:", ["USUARIOS", "PARTIDOS", "PAGOS_MENSUALES"]
+                "Selecciona tabla:",
+                [
+                    "USUARIOS",
+                    "PARTIDOS",
+                    "HISTORICO_PARTIDOS",
+                    "ACUMULADO_TEMPORADA",
+                    "PAGOS_MENSUALES",
+                ],
             )
             df_audit = obtener_datos_pestana(tabla_sel)
             st.dataframe(df_audit, use_container_width=True)
