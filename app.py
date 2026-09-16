@@ -208,8 +208,121 @@ def crear_evento_google_calendar(calendar_id, titulo, fecha_dt, equipo):
 # =====================================================================
 # 📊 GENERADORES NATIVOS DE GRÁFICOS TÁCTICOS
 # =====================================================================
+def generar_grafico_resumen_pagina2(datos, equipo_local, equipo_visita):
+    """Genera un gráfico dual (Rosca de Posesión + Efectividad de Remates) para llenar la Página 2."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.2))
+    fig.patch.set_facecolor("#0D0D0D")
+
+    # 1. Gráfico de Rosca de Posesión
+    ax1.set_facecolor("#0D0D0D")
+    try:
+        pos_l = float(
+            str(datos.get("pos_local", "45.3")).replace("%", "").strip() or 45.3
+        )
+        pos_v = float(
+            str(datos.get("pos_visita", "54.7")).replace("%", "").strip() or 54.7
+        )
+    except Exception:
+        pos_l, pos_v = 45.3, 54.7
+
+    sizes = [pos_l, pos_v]
+    colors = ["#FF5500", "#00E5FF"]
+    labels = [f"{equipo_local}\n{pos_l}%", f"{equipo_visita}\n{pos_v}%"]
+
+    wedges, texts, autotexts = ax1.pie(
+        sizes,
+        labels=labels,
+        colors=colors,
+        autopct="%1.1f%%",
+        startangle=90,
+        pctdistance=0.72,
+        textprops=dict(color="white", fontsize=8, weight="bold"),
+    )
+    for t in texts:
+        t.set_color("white")
+        t.set_fontsize(8)
+        t.set_weight("bold")
+    for at in autotexts:
+        at.set_color("black")
+        at.set_fontsize(8)
+        at.set_weight("bold")
+
+    centre_circle = plt.Circle((0, 0), 0.52, fc="#0D0D0D")
+    ax1.add_artist(centre_circle)
+    ax1.set_title(
+        "POSESIÓN DE BALÓN (%)", color="white", fontsize=9.5, weight="bold", pad=8
+    )
+
+    # 2. Gráfico de Barras de Remates vs Goles
+    ax2.set_facecolor("#0D0D0D")
+    try:
+        g_l = int(datos.get("goles_local", 4))
+        g_v = int(datos.get("goles_visita", 2))
+        r_l = int(datos.get("remates_local", 20))
+        r_v = int(datos.get("remates_visita", 34))
+    except Exception:
+        g_l, g_v, r_l, r_v = 4, 2, 20, 34
+
+    metricas = ["Remates Totales", "Goles Concretados"]
+    x = np.arange(len(metricas))
+    width = 0.35
+
+    ax2.bar(
+        x - width / 2, [r_l, g_l], width, label=equipo_local, color="#FF5500"
+    )
+    ax2.bar(
+        x + width / 2, [r_v, g_v], width, label=equipo_visita, color="#00E5FF"
+    )
+
+    ax2.set_title(
+        "EFECTIVIDAD OFENSIVA", color="white", fontsize=9.5, weight="bold", pad=8
+    )
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(metricas, color="white", fontsize=8, weight="bold")
+    ax2.tick_params(colors="white")
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+    ax2.spines["bottom"].set_color("#333333")
+    ax2.spines["left"].set_color("#333333")
+
+    for bar in ax2.patches:
+        h = bar.get_height()
+        if h > 0:
+            ax2.annotate(
+                f"{int(h)}",
+                (bar.get_x() + bar.get_width() / 2, h),
+                ha="center",
+                va="bottom",
+                color="white",
+                fontsize=8,
+                weight="bold",
+                xytext=(0, 2),
+                textcoords="offset points",
+            )
+
+    ax2.legend(
+        loc="upper right",
+        facecolor="#0D0D0D",
+        edgecolor="#FF5500",
+        labelcolor="white",
+        fontsize=7.5,
+    )
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(
+        buf,
+        format="PNG",
+        bbox_inches="tight",
+        facecolor=fig.get_facecolor(),
+        dpi=200,
+    )
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
-    """Genera un Radar Chart nítido con alto contraste entre ambos equipos."""
     categorias = [
         "Eficacia Gol",
         "Posesión %",
@@ -284,7 +397,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     ax.spines["polar"].set_linewidth(1.5)
     ax.grid(color="#222222", linestyle="--", linewidth=0.8)
 
-    # Fortaleza (Naranja)
     ax.plot(
         angulos,
         val_loc,
@@ -295,7 +407,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_loc, color="#FF5500", alpha=0.35)
 
-    # Aurinegro (Cian Neón para diferenciación clara)
     ax.plot(
         angulos,
         val_vis,
@@ -306,7 +417,6 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
     )
     ax.fill(angulos, val_vis, color="#00E5FF", alpha=0.15)
 
-    # Etiquetas de Fortaleza
     labels_loc = [
         f"{g_loc:.0f} Goles",
         f"{pos_l:.1f}%",
@@ -355,9 +465,8 @@ def generar_radar_chart_tactico(datos, equipo_local, equipo_visita):
 
 
 def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
-    """Genera el mapa de remates exclusivo de Fortaleza sobre una cancha verde césped táctica."""
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
-    fig.patch.set_facecolor("#1b4332")  # Verde césped táctico profesional
+    fig.patch.set_facecolor("#1b4332")
     ax.set_facecolor("#1b4332")
 
     line_col = "#ffffff"
@@ -371,7 +480,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
     rem_l = int(datos.get("remates_local", 20))
     gol_l = int(datos.get("goles_local", 4))
 
-    # Goles (Naranja brillante con borde blanco)
     x_gol_l = np.random.uniform(43, 57, gol_l)
     y_gol_l = np.random.uniform(91, 98, gol_l)
     ax.scatter(
@@ -385,7 +493,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
         label=f"Goles ({gol_l})",
     )
 
-    # Remates Fuera / Salvados (Amarillo/Verde neón alto contraste)
     x_rem_l = np.random.uniform(22, 78, max(0, rem_l - gol_l))
     y_rem_l = np.random.uniform(65, 96, max(0, rem_l - gol_l))
     ax.scatter(
@@ -433,7 +540,6 @@ def generar_shot_chart_natico(datos, equipo_local, equipo_visita):
 
 
 def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
-    """Genera un gráfico horizontal despejado para evitar colisiones de texto."""
     fig, ax = plt.subplots(figsize=(8, 3.2))
     fig.patch.set_facecolor("#0D0D0D")
     ax.set_facecolor("#0D0D0D")
@@ -466,7 +572,7 @@ def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
     ax.set_yticks(y_pos)
     ax.set_yticklabels(tercios, color="white", fontsize=9, weight="bold")
     ax.invert_yaxis()
-    ax.set_xlim(0, 42)  # Espacio horizontal extra para evitar choques de texto
+    ax.set_xlim(0, 42)
     ax.set_xlabel(
         f"Volumen y Precisión de Pase: {equipo_local}",
         color="#AAAAAA",
@@ -689,7 +795,9 @@ class PDFReporteFocus(FPDF):
             )
 
 
-def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
+def generar_pdf_6_paginas(
+    data, buf_radar=None, buf_shot=None, buf_pases=None, buf_p2_resumen=None
+):
     pdf = PDFReporteFocus()
     pdf.set_margins(12, 12, 12)
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -759,7 +867,7 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
         0, 5, "Documento preparado por FOCUS by AccuSport", ln=True, align="C"
     )
 
-    # PÁGINA 2: ANÁLISIS GENERAL
+    # PÁGINA 2: ANÁLISIS GENERAL CON GRÁFICO RESUMEN INTEGRADO
     pdf.add_page()
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 16)
@@ -774,28 +882,28 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
 
     # Marcador Central
     pdf.set_fill_color(*DARK)
-    pdf.rect(12, pdf.get_y(), 186, 20, "F")
-    pdf.set_font("Helvetica", "B", 16)
+    pdf.rect(12, pdf.get_y(), 186, 18, "F")
+    pdf.set_font("Helvetica", "B", 15)
     pdf.set_text_color(*WHITE)
     pdf.set_x(12)
     pdf.cell(
         0,
-        13,
+        12,
         f"{eq_loc}  {data.get('goles_local', 4)} - {data.get('goles_visita', 2)}  {eq_vis}",
         ln=True,
         align="C",
     )
-    pdf.ln(10)
+    pdf.ln(8)
 
     # Grilla de Tarjetas Métricas
     pdf.set_fill_color(*GRAY_BG)
     y_cards = pdf.get_y()
     w_card = 43
 
-    pdf.rect(12, y_cards, w_card, 18, "F")
-    pdf.rect(59, y_cards, w_card, 18, "F")
-    pdf.rect(106, y_cards, w_card, 18, "F")
-    pdf.rect(153, y_cards, 45, 18, "F")
+    pdf.rect(12, y_cards, w_card, 16, "F")
+    pdf.rect(59, y_cards, w_card, 16, "F")
+    pdf.rect(106, y_cards, w_card, 16, "F")
+    pdf.rect(153, y_cards, 45, 16, "F")
 
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_text_color(*TEXT_DARK)
@@ -810,41 +918,50 @@ def generar_pdf_6_paginas(data, buf_radar=None, buf_shot=None, buf_pases=None):
     pdf.set_x(153)
     pdf.cell(45, 4, "PRECISIÓN PASE", align="C", ln=True)
 
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_font("Helvetica", "B", 10.5)
     pdf.set_text_color(*ORANGE)
     pdf.set_x(12)
-    pdf.cell(w_card, 7, f"{data.get('pos_local', '45.3%')}", align="C")
+    pdf.cell(w_card, 6, f"{data.get('pos_local', '45.3%')}", align="C")
     pdf.set_x(59)
-    pdf.cell(w_card, 7, f"{data.get('remates_local', '20')}", align="C")
+    pdf.cell(w_card, 6, f"{data.get('remates_local', '20')}", align="C")
     pdf.set_x(106)
-    pdf.cell(w_card, 7, f"{data.get('goles_local', '4')}", align="C")
+    pdf.cell(w_card, 6, f"{data.get('goles_local', '4')}", align="C")
     pdf.set_x(153)
     pdf.cell(
-        45, 7, f"{data.get('precision_pase_local', '60%')}", align="C", ln=True
+        45, 6, f"{data.get('precision_pase_local', '60%')}", align="C", ln=True
     )
-    pdf.ln(10)
+    pdf.ln(8)
 
     # Bloque Lectura General
     pdf.set_x(12)
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_font("Helvetica", "B", 10.5)
     pdf.set_text_color(*TEXT_DARK)
-    pdf.cell(0, 6, "Lectura Táctica General:", ln=True)
+    pdf.cell(0, 5, "Lectura Táctica General:", ln=True)
     pdf.set_x(12)
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("Helvetica", "", 9.5)
     pdf.multi_cell(
-        0, 5, sanitizar_texto(data.get("lectura_general", "Sin datos."))
+        0, 4.5, sanitizar_texto(data.get("lectura_general", "Sin datos."))
     )
-    pdf.ln(6)
+    pdf.ln(4)
 
     # Conclusiones Clave
     pdf.set_x(12)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 6, "Conclusiones Clave del Encuentro:", ln=True)
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("Helvetica", "B", 10.5)
+    pdf.cell(0, 5, "Conclusiones Clave del Encuentro:", ln=True)
+    pdf.set_font("Helvetica", "", 9.5)
     for conc in data.get("conclusiones", []):
         pdf.set_x(12)
-        pdf.multi_cell(0, 5, sanitizar_texto(f"- {conc}"))
-        pdf.ln(2)
+        pdf.multi_cell(0, 4.5, sanitizar_texto(f"- {conc}"))
+        pdf.ln(1)
+
+    # INSERCIÓN DEL GRÁFICO DUAL RESUMEN EN PÁGINA 2 PARA ELIMINAR EL ESPACIO EN BLANCO
+    if buf_p2_resumen:
+        try:
+            pdf.ln(2)
+            pdf.image(buf_p2_resumen, x=15, y=pdf.get_y(), w=180)
+            pdf.set_x(12)
+        except Exception:
+            pass
 
     # PÁGINA 3: COMPARATIVO Y RADAR
     pdf.add_page()
@@ -1293,6 +1410,9 @@ with tab_admin:
                 buf_pases = generar_pases_tercios_nativo(
                     datos_finales, eq_local, eq_visita
                 )
+                buf_p2_resumen = generar_grafico_resumen_pagina2(
+                    datos_finales, eq_local, eq_visita
+                )
 
                 data_pdf = {
                     "equipo_local": eq_local,
@@ -1313,7 +1433,7 @@ with tab_admin:
                 }
 
                 pdf_bytes = generar_pdf_6_paginas(
-                    data_pdf, buf_radar, buf_shot, buf_pases
+                    data_pdf, buf_radar, buf_shot, buf_pases, buf_p2_resumen
                 )
                 st.download_button(
                     label="📥 DESCARGAR REPORTE FINAL EN PDF",
