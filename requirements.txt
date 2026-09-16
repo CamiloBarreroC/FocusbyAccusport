@@ -7,3 +7,6 @@ fpdf2
 pdfplumber
 Pillow
 google-genai
+matplotlib
+jinja2
+xhtml2pdf
