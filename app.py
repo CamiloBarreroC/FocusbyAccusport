@@ -26,6 +26,7 @@ except ImportError:
 # 📝 CONFIGURACIÓN INICIAL Y CENTRAL DE BRANDING
 # =====================================================================
 CONFIG_SHEET_ID = "1wJi3hOQaeIDY--OcFOxsy-ycb-uyATDpqIGvMYvHPg4"
+DRIVE_FOLDER_ID = "1qUFWSH_wvAxpONKuWPaOjF7xqQ8vTrDC"
 FOCUS_CALENDAR_DEFAULT = "c_3df55a2bb225d2a2d2054496334a5d7c7f9afca3f9099aea782b278fd9f45472@group.calendar.google.com"
 PATH_LOGO_FOCUS = "IMG-20260521-WA0004.jpg"
 
@@ -292,6 +293,7 @@ def subir_foto_jugador_drive(file_obj, nombre_jugador, dorsal, equipo):
         file_metadata = {
             "name": f"FOTO_#{dorsal}_{nombre_limpio}_{equipo}.jpg",
             "mimeType": "image/jpeg",
+            "parents": [DRIVE_FOLDER_ID],
         }
         media = MediaIoBaseUpload(
             io.BytesIO(file_obj.getvalue()),
@@ -877,7 +879,6 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
         rec = int(data_jugador.get("recuperaciones", 0))
         duel = int(data_jugador.get("duelos_def_ganados", 0))
 
-        # Buscar si el jugador ya tiene Foto_URL guardada por Nombre o Dorsal
         foto_url = ""
         try:
             ws_acum = sheet.worksheet("ACUMULADO_TEMPORADA")
@@ -941,7 +942,6 @@ def procesar_e_ingresar_jugador_db(data_jugador, fecha, equipo, rival):
             prec_p = f"{round((pc_tot / max(1, pi_tot)) * 100, 1)}%"
             rec_tot = int(pd.to_numeric(df_jug["Recuperaciones"], errors="coerce").sum())
 
-            # Búsqueda de fila existente por Nombre o por Dorsal+Equipo
             cell_found = None
             try:
                 records = ws_acum.get_all_records()
