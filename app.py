@@ -149,8 +149,7 @@ def obtener_valor_columna(row, nombres_posibles, fallback_index=None, defecto=""
 def renderizar_reproductor_video(link_url):
     """Renderiza un reproductor multimedia compatible con Google Drive, YouTube y video directo."""
     if not link_url or not isinstance(link_url, str) or not link_url.startswith("http"):
-        st.info("ℹ️ No hay enlace de video cargado para este encuentro.")
-        return
+        return False
 
     link_url = link_url.strip()
 
@@ -170,6 +169,7 @@ def renderizar_reproductor_video(link_url):
         </div>
         """
         components.html(iframe_code, height=380)
+        return True
     elif (
         "youtube.com" in link_url
         or "youtu.be" in link_url
@@ -177,10 +177,11 @@ def renderizar_reproductor_video(link_url):
     ):
         try:
             st.video(link_url)
+            return True
         except Exception:
-            st.warning("⚠️ No se pudo reproducir el video directamente.")
+            return False
     else:
-        st.info("📁 El enlace guardado corresponde a una carpeta de almacenamiento o recurso externo.")
+        return False
 
 
 # =====================================================================
@@ -2196,7 +2197,6 @@ with tab_padres:
                 # =====================================================================
 
                 for idx, row in partidos_filtrados.iterrows():
-                    # Aquí usamos los nombres EXACTOS de tu Google Sheets y las posiciones numéricas
                     rival = obtener_valor_columna(
                         row,
                         ["Rival/Partido", "Rival", "rival", "RIVAL", "Equipo Rival"],
@@ -2209,10 +2209,20 @@ with tab_padres:
                         fallback_index=1, # Columna B es el índice 1
                         defecto="S/F"
                     )
+                    
+                    # 1. LINK DE VIDEO:
                     link_drive = obtener_valor_columna(
                         row,
-                        ["Link_Download_driver", "Link", "link", "LINK", "Url", "URL"],
+                        ["Link_Download_driver", "Link", "link", "LINK", "Url_Video"],
                         fallback_index=4, # Columna E es el índice 4
+                        defecto="",
+                    )
+                    
+                    # 2. LINK DE REPORTE (NUEVO):
+                    link_reporte = obtener_valor_columna(
+                        row,
+                        ["Link_Reporte", "Reporte", "REPORTE", "Reporte_PDF", "PDF"],
+                        fallback_index=6, # Columna G es el índice 6
                         defecto="",
                     )
 
@@ -2221,16 +2231,36 @@ with tab_padres:
                         st.markdown(f"📅 **Fecha:** {fecha_str}")
 
                         # 🎥 REPRODUCTOR DE VIDEO EMBEBIDO
-                        renderizar_reproductor_video(link_drive)
+                        video_mostrado = renderizar_reproductor_video(link_drive)
+                        
+                        st.write("") # Espaciado
 
-                        # 📥 BOTÓN DE DESCARGA / ACCESO DIRECTO
-                        if link_drive and "http" in link_drive:
-                            st.write("")
-                            st.link_button(
-                                "📥 ABRIR EN GOOGLE DRIVE / DESCARGAR REPORTE",
-                                link_drive,
-                                use_container_width=True,
-                            )
+                        # LÓGICA DINÁMICA DE BOTONES DE DESCARGA
+                        hay_video = link_drive and "http" in link_drive
+                        hay_reporte = link_reporte and "http" in link_reporte
+                        
+                        if hay_video and hay_reporte:
+                            # Si hay ambos, dividimos en dos columnas para botones
+                            col_b1, col_b2 = st.columns(2)
+                            with col_b1:
+                                if video_mostrado:
+                                    st.link_button("🎥 ABRIR VIDEO COMPLETO EN DRIVE", link_drive, use_container_width=True)
+                                else:
+                                    st.link_button("🎥 VER/DESCARGAR VIDEO DEL PARTIDO", link_drive, use_container_width=True)
+                            with col_b2:
+                                st.link_button("📊 DESCARGAR REPORTE TÁCTICO PDF", link_reporte, use_container_width=True)
+                                
+                        elif hay_video:
+                            # Solo hay video
+                            if video_mostrado:
+                                st.link_button("🎥 ABRIR VIDEO COMPLETO EN DRIVE", link_drive, use_container_width=True)
+                            else:
+                                st.link_button("🎥 VER/DESCARGAR VIDEO DEL PARTIDO", link_drive, use_container_width=True)
+                                
+                        elif hay_reporte:
+                            # Solo hay reporte PDF
+                            st.link_button("📊 DESCARGAR REPORTE TÁCTICO PDF", link_reporte, use_container_width=True)
+
             else:
                 st.info(
                     "ℹ️ No hay videos cargados ni filmaciones programadas para este equipo todavía."
@@ -2671,6 +2701,7 @@ with tab_admin:
                         "Listo",
                         "https://drive.google.com",
                         0,
+                        "", # Espacio en blanco para Columna G (Link_Reporte)
                     ],
                 )
                 if exito:
@@ -2694,15 +2725,19 @@ with tab_admin:
                 "Categoría / Equipo Destino:", value="Fortaleza 2017 B"
             )
             rival_sel = st.text_input("Nombre del Rival:")
-            link_sel = st.text_input(
-                "Enlace Google Drive del Video / Reporte PDF:"
+            link_video = st.text_input(
+                "🎥 Enlace Google Drive del VIDEO (Requerido):"
+            )
+            link_reporte = st.text_input(
+                "📊 Enlace Google Drive del REPORTE PDF (Opcional):"
             )
             if st.button("💾 Publicar Partido", use_container_width=True):
                 if rival_sel:
                     fecha_str = fecha_sel.strftime("%d/%m/%Y")
+                    # Se insertan 7 columnas: Equipo, Fecha, Rival, Estado, Video, Recaudo, Reporte
                     exito = agregar_fila_excel(
                         "PARTIDOS",
-                        [equipo_sel, fecha_str, rival_sel, "Listo", link_sel, 0],
+                        [equipo_sel, fecha_str, rival_sel, "Listo", link_video, 0, link_reporte],
                     )
                     if exito:
                         crear_evento_google_calendar(
