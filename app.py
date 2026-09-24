@@ -114,8 +114,9 @@ for key, val in defaults.items():
 # =====================================================================
 # 🛠️ FUNCIONES DE UTILIDAD Y PARSER DE DATOS
 # =====================================================================
-def obtener_valor_columna(row, nombres_posibles, defecto=""):
-    """Extrae un valor de la fila probando múltiples nombres de columna sin importar mayúsculas, minúsculas o espacios."""
+def obtener_valor_columna(row, nombres_posibles, fallback_index=None, defecto=""):
+    """Busca el valor por nombre exacto, coincidencia parcial o por posición de la columna."""
+    # 1. Búsqueda por los nombres (ignorando mayúsculas/minúsculas)
     cols_row = {str(k).strip().lower(): k for k in row.index}
     for nombre in nombres_posibles:
         nombre_clean = nombre.strip().lower()
@@ -123,11 +124,25 @@ def obtener_valor_columna(row, nombres_posibles, defecto=""):
             real_col = cols_row[nombre_clean]
             val = row[real_col]
             if (
-                pd.notna(val)
-                and str(val).strip() != ""
+                pd.notna(val) 
+                and str(val).strip() != "" 
                 and str(val).strip().lower() not in ["none", "nan", "null"]
             ):
                 return str(val).strip()
+                
+    # 2. Respaldo (Fallback): Si le cambian el nombre al Excel, saca el dato por la POSICIÓN de la columna
+    if fallback_index is not None:
+        try:
+            val = row.iloc[fallback_index]
+            if (
+                pd.notna(val) 
+                and str(val).strip() != "" 
+                and str(val).strip().lower() not in ["none", "nan", "null"]
+            ):
+                return str(val).strip()
+        except IndexError:
+            pass
+            
     return defecto
 
 
@@ -2161,25 +2176,24 @@ with tab_padres:
 
             if not partidos_filtrados.empty:
                 for idx, row in partidos_filtrados.iterrows():
+                    # Aquí usamos los nombres EXACTOS de tu Google Sheets y las posiciones numéricas
                     rival = obtener_valor_columna(
                         row,
-                        [
-                            "Rival",
-                            "rival",
-                            "RIVAL",
-                            "Equipo Rival",
-                            "Contrincante",
-                            "Rival/Torneo",
-                        ],
-                        "Rival Desconocido",
+                        ["Rival/Partido", "Rival", "rival", "RIVAL", "Equipo Rival"],
+                        fallback_index=2, # Columna C es el índice 2
+                        defecto="Rival Desconocido",
                     )
                     fecha_str = obtener_valor_columna(
-                        row, ["Fecha", "fecha", "FECHA", "Fecha_Partido"], "S/F"
+                        row, 
+                        ["Fecha", "fecha", "FECHA", "Fecha_Partido"], 
+                        fallback_index=1, # Columna B es el índice 1
+                        defecto="S/F"
                     )
                     link_drive = obtener_valor_columna(
                         row,
-                        ["Link", "link", "LINK", "Url", "URL", "Drive", "Link_Drive"],
-                        "",
+                        ["Link_Download_driver", "Link", "link", "LINK", "Url", "URL"],
+                        fallback_index=4, # Columna E es el índice 4
+                        defecto="",
                     )
 
                     with st.container(border=True):
@@ -2193,7 +2207,7 @@ with tab_padres:
                         if link_drive and "http" in link_drive:
                             st.write("")
                             st.link_button(
-                                "📥 ABRIR EN GOOGLE DRIVE / DESCARGAR REPORTE Y VIDEO",
+                                "📥 ABRIR EN GOOGLE DRIVE / DESCARGAR REPORTE",
                                 link_drive,
                                 use_container_width=True,
                             )
