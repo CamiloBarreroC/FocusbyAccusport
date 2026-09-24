@@ -2175,6 +2175,26 @@ with tab_padres:
             ].copy()
 
             if not partidos_filtrados.empty:
+                
+                # ====== NUEVO: ORDENAMIENTO POR FECHA (MÁS NUEVO A MÁS VIEJO) ======
+                def extract_and_parse_date(row):
+                    fecha_str = obtener_valor_columna(
+                        row, 
+                        ["Fecha", "fecha", "FECHA", "Fecha_Partido"], 
+                        fallback_index=1, 
+                        defecto=""
+                    )
+                    try:
+                        # Intenta convertir el texto de fecha en formato dd/mm/yyyy a datetime
+                        return pd.to_datetime(fecha_str, format="%d/%m/%Y")
+                    except Exception:
+                        # Si no hay fecha o es inválida, se asigna una fecha muy antigua para que vaya al final
+                        return pd.to_datetime("1900-01-01")
+
+                partidos_filtrados["_fecha_dt"] = partidos_filtrados.apply(extract_and_parse_date, axis=1)
+                partidos_filtrados = partidos_filtrados.sort_values(by="_fecha_dt", ascending=False)
+                # =====================================================================
+
                 for idx, row in partidos_filtrados.iterrows():
                     # Aquí usamos los nombres EXACTOS de tu Google Sheets y las posiciones numéricas
                     rival = obtener_valor_columna(
