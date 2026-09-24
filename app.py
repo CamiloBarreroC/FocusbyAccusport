@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 import streamlit as st
+import streamlit.components.v1 as components
 
 try:
     import pdfplumber
@@ -108,6 +109,63 @@ defaults = {
 for key, val in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
+
+
+# =====================================================================
+# 🛠️ FUNCIONES DE UTILIDAD Y PARSER DE DATOS
+# =====================================================================
+def obtener_valor_columna(row, nombres_posibles, defecto=""):
+    """Extrae un valor de la fila probando múltiples nombres de columna sin importar mayúsculas, minúsculas o espacios."""
+    cols_row = {str(k).strip().lower(): k for k in row.index}
+    for nombre in nombres_posibles:
+        nombre_clean = nombre.strip().lower()
+        if nombre_clean in cols_row:
+            real_col = cols_row[nombre_clean]
+            val = row[real_col]
+            if (
+                pd.notna(val)
+                and str(val).strip() != ""
+                and str(val).strip().lower() not in ["none", "nan", "null"]
+            ):
+                return str(val).strip()
+    return defecto
+
+
+def renderizar_reproductor_video(link_url):
+    """Renderiza un reproductor multimedia compatible con Google Drive, YouTube y video directo."""
+    if not link_url or not isinstance(link_url, str) or not link_url.startswith("http"):
+        st.info("ℹ️ No hay enlace de video cargado para este encuentro.")
+        return
+
+    link_url = link_url.strip()
+
+    drive_match = re.search(r"(?:file/d/|id=)([\w-]+)", link_url)
+    is_drive_folder = (
+        "drive.google.com/drive/folders" in link_url
+        or "drive.google.com/drive/u/" in link_url
+    )
+
+    if "drive.google.com" in link_url and drive_match and not is_drive_folder:
+        file_id = drive_match.group(1)
+        embed_url = f"https://drive.google.com/file/d/{file_id}/preview"
+
+        iframe_code = f"""
+        <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; border-radius: 12px; border: 1px solid #ff5500; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.25);">
+            <iframe src="{embed_url}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" allow="autoplay" allowfullscreen></iframe>
+        </div>
+        """
+        components.html(iframe_code, height=380)
+    elif (
+        "youtube.com" in link_url
+        or "youtu.be" in link_url
+        or link_url.endswith((".mp4", ".mov", ".m4v", ".webm"))
+    ):
+        try:
+            st.video(link_url)
+        except Exception:
+            st.warning("⚠️ No se pudo reproducir el video directamente.")
+    else:
+        st.info("📁 El enlace guardado corresponde a una carpeta de almacenamiento o recurso externo.")
 
 
 # =====================================================================
@@ -279,7 +337,6 @@ def inicializar_pestanas_jugadores():
 
 
 def procesar_foto_jugador_base64(file_obj):
-    """Optimiza la foto del jugador a 180x180 px con compresión ultra ligera para Google Sheets."""
     try:
         img = Image.open(io.BytesIO(file_obj.getvalue()))
         if img.mode != "RGB":
@@ -301,7 +358,6 @@ def procesar_foto_jugador_base64(file_obj):
 # 📊 GENERADORES NATIVOS Y MAPA DE CALOR MANUAL
 # =====================================================================
 def generar_mapa_calor_manual(matriz_3x3, nombre_jugador):
-    """Genera un Mapa de Calor suavizado sobre una cancha verde táctica."""
     fig, ax = plt.subplots(figsize=(6.5, 3.8))
     fig.patch.set_facecolor("#1b4332")
     ax.set_facecolor("#1b4332")
@@ -760,7 +816,6 @@ def generar_pases_tercios_nativo(datos, equipo_local, equipo_visita):
 # 🤖 MOTOR ACCUS-IA HÍBRIDO (REGEX + VISION)
 # =====================================================================
 def parse_hudl_stats_regex(texto_crudo):
-    """Extrae determinísticamente los valores del reporte Hudl usando patrones bilingües de texto."""
     stats = {}
     txt_norm = re.sub(r"\s+", " ", texto_crudo)
 
@@ -853,13 +908,11 @@ def generar_analisis_tactico_gemini(
 
 
 def extraer_datos_jugador_gemini(files_jugador):
-    """Procesa e inspecciona los PDFs mediante el lector híbrido RegEx + Gemini Vision."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
             st.error("⚠️ No se encontró GEMINI_API_KEY.")
             return None
 
-        # 1. Extracción Determinista previa con pdfplumber
         texto_acumulado = ""
         if pdfplumber:
             for file_obj in files_jugador:
@@ -873,7 +926,6 @@ def extraer_datos_jugador_gemini(files_jugador):
 
         stats_regex = parse_hudl_stats_regex(texto_acumulado)
 
-        # 2. Extracción mediante Gemini Multimodal
         api_key = st.secrets["GEMINI_API_KEY"]
         client = genai.Client(api_key=api_key)
 
@@ -938,7 +990,6 @@ def extraer_datos_jugador_gemini(files_jugador):
 
         res_json = json.loads(response.text)
 
-        # 3. FUSIÓN HÍBRIDA: Reemplazar ceros de la IA con los datos reales encontrados por RegEx
         for k, v in stats_regex.items():
             if v > 0:
                 res_json[k] = v
@@ -950,7 +1001,6 @@ def extraer_datos_jugador_gemini(files_jugador):
 
 
 def generar_scouting_cualitativo_jugador(data_jugador):
-    """Genera un análisis de scouting cualitativo personalizado con AccusIA con guardarraíl de consistencia."""
     try:
         if "GEMINI_API_KEY" not in st.secrets:
             return {
@@ -1732,7 +1782,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
 
     pdf.ln(18)
 
-    # Tarjetas Métricas
     pdf.set_fill_color(*GRAY_BG)
     y_cards = pdf.get_y()
     w_card = 43
@@ -1790,7 +1839,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
 
     pdf.ln(10)
 
-    # Tabla Desglose de Acciones
     pdf.set_x(12)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*DARK)
@@ -1844,7 +1892,6 @@ def generar_pdf_ficha_partido_jugador(data_jug, buf_mapa_calor=None):
 
     pdf.ln(6)
 
-    # Inserción Controlada del Mapa de Calor
     if buf_mapa_calor:
         try:
             curr_y = pdf.get_y()
@@ -2114,16 +2161,39 @@ with tab_padres:
 
             if not partidos_filtrados.empty:
                 for idx, row in partidos_filtrados.iterrows():
-                    rival = row.get("Rival", "Rival Desconocido")
-                    fecha_str = row.get("Fecha", "S/F")
-                    link_drive = row.get("Link", "")
+                    rival = obtener_valor_columna(
+                        row,
+                        [
+                            "Rival",
+                            "rival",
+                            "RIVAL",
+                            "Equipo Rival",
+                            "Contrincante",
+                            "Rival/Torneo",
+                        ],
+                        "Rival Desconocido",
+                    )
+                    fecha_str = obtener_valor_columna(
+                        row, ["Fecha", "fecha", "FECHA", "Fecha_Partido"], "S/F"
+                    )
+                    link_drive = obtener_valor_columna(
+                        row,
+                        ["Link", "link", "LINK", "Url", "URL", "Drive", "Link_Drive"],
+                        "",
+                    )
 
                     with st.container(border=True):
                         st.markdown(f"## 🆚 {rival}")
                         st.markdown(f"📅 **Fecha:** {fecha_str}")
+
+                        # 🎥 REPRODUCTOR DE VIDEO EMBEBIDO
+                        renderizar_reproductor_video(link_drive)
+
+                        # 📥 BOTÓN DE DESCARGA / ACCESO DIRECTO
                         if link_drive and "http" in link_drive:
+                            st.write("")
                             st.link_button(
-                                "📥 VER / DESCARGAR REPORTE Y VIDEO",
+                                "📥 ABRIR EN GOOGLE DRIVE / DESCARGAR REPORTE Y VIDEO",
                                 link_drive,
                                 use_container_width=True,
                             )
